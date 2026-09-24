@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workstation · 个人 AI 工作台</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --border: #e2e5ea;
+    --text: #1f2328;
+    --muted: #6b7280;
+    --accent: #2563eb;
+    --ok: #15803d;
+    --warn: #b45309;
+    --fail: #b91c1c;
+    --code-bg: #f2f4f7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    background: var(--bg); color: var(--text);
+    font: 14px/1.6 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  }
+  header { margin-bottom: 20px; }
+  h1 { font-size: 20px; margin: 0 0 4px; font-weight: 650; }
+  .sub { color: var(--muted); font-size: 13px; }
+  main { display: grid; gap: 16px; max-width: 1080px; }
+  section {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px 18px;
+  }
+  h2 { font-size: 15px; margin: 0 0 12px; font-weight: 650; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  input[type=text], select, textarea {
+    border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px;
+    font: inherit; color: var(--text); background: #fff;
+  }
+  input[type=text] { flex: 1 1 260px; min-width: 180px; }
+  textarea { width: 100%; min-height: 92px; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
+  button {
+    border: 1px solid var(--accent); background: var(--accent); color: #fff;
+    border-radius: 6px; padding: 7px 14px; font: inherit; cursor: pointer;
+  }
+  button.ghost { background: #fff; color: var(--accent); }
+  button:disabled { opacity: .55; cursor: default; }
+  label.inline { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 13px; }
+  .empty { color: var(--muted); font-size: 13px; padding: 6px 0; }
+  .hit { border-top: 1px solid var(--border); padding: 10px 0; }
+  .hit:first-child { border-top: 0; }
+  .hit .title { font-weight: 600; }
+  .hit .meta { color: var(--muted); font-size: 12px; margin: 2px 0 4px; }
+  .hit .text { color: #374151; font-size: 13px; }
+  .tag {
+    display: inline-block; border: 1px solid var(--border); border-radius: 4px;
+    padding: 0 6px; font-size: 11.5px; color: var(--muted); background: var(--code-bg);
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; }
+  tr.row-click { cursor: pointer; }
+  tr.row-click:hover { background: var(--code-bg); }
+  .st { font-weight: 600; }
+  .st.succeeded { color: var(--ok); }
+  .st.failed, .st.blocked { color: var(--fail); }
+  .st.running, .st.pending { color: var(--warn); }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 12px; overflow: auto; max-height: 340px; font-size: 12px; margin: 10px 0 0;
+  }
+  footer { margin-top: 18px; color: var(--muted); font-size: 12px; max-width: 1080px; }
+  .err { color: var(--fail); font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Workstation · 个人 AI 工作台</h1>
+  <div class="sub" id="meta">加载中…</div>
+</header>
+
+<main>
+  <section>
+    <h2>检索（按场景隔离）</h2>
+    <div class="row">
+      <select id="ctx" title="context"></select>
+      <input type="text" id="q" placeholder="查询，例如：langgraph 和 langchain 区别">
+      <label class="inline"><input type="checkbox" id="cross"> 跨场景（显式 opt-in）</label>
+      <button id="go">检索</button>
+    </div>
+    <div id="hits"></div>
+  </section>
+
+  <section>
+    <h2>Runs</h2>
+    <div class="row">
+      <select id="skill" title="skill"></select>
+      <select id="runctx" title="context"></select>
+      <button id="submit">提交</button>
+    </div>
+    <textarea id="inputs" spellcheck="false"></textarea>
+    <div class="row" style="margin-top:10px">
+      <button class="ghost" id="refresh">刷新历史</button>
+      <select id="status">
+        <option value="">全部状态</option>
+        <option value="succeeded">succeeded</option>
+        <option value="failed">failed</option>
+        <option value="blocked">blocked</option>
+        <option value="running">running</option>
+      </select>
+      <span class="sub" id="runmsg"></span>
+    </div>
+    <div id="list"></div>
+    <pre id="detail" hidden></pre>
+  </section>
+</main>
+
+<footer>
+  仅监听 loopback，数据不出本机。检索按 context 收窄、跨域为显式 opt-in；记忆/画像按场景隔离，绝不合并。
+</footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+const PRESET = {
+  "knowledge-search": { vault: "D:/develop/agent for obsidian/knowledge", query: "langgraph 和 langchain 区别", limit: 5 },
+  "ppt-deck": { brief: "开题报告", mode: "render", accept_padding: true },
+};
+
+let SKILLS = [];
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  const ct = res.headers.get("content-type") || "";
+  const data = ct.includes("json") ? await res.json() : await res.text();
+  if (!res.ok) {
+    const msg = (data && (data.message || data.error)) || res.statusText;
+    throw new Error(`${res.status} ${msg}`);
+  }
+  return data;
+}
+
+async function boot() {
+  try {
+    const h = await api("/api/health");
+    $("meta").textContent =
+      `v${h.version} · contracts ${h.contract_version} · home ${h.home} · 场景 ${h.contexts.join(", ")} · 源 ${h.sources.join(", ")}`;
+    fill($("ctx"), h.contexts, "default");
+    fill($("runctx"), h.contexts, "default");
+    const s = await api("/api/skills");
+    SKILLS = s.skills.map(x => x.name);
+    fill($("skill"), SKILLS, SKILLS[0]);
+    syncInputs();
+    loadRuns();
+  } catch (e) {
+    $("meta").innerHTML = `<span class="err">无法连接工作台：${esc(e.message)}</span>`;
+  }
+}
+
+function fill(sel, items, prefer) {
+  sel.innerHTML = items.map(i => `<option value="${esc(i)}">${esc(i)}</option>`).join("");
+  if (prefer && items.includes(prefer)) sel.value = prefer;
+}
+
+function syncInputs() {
+  const name = $("skill").value;
+  $("inputs").value = JSON.stringify(PRESET[name] || {}, null, 2);
+}
+
+$("skill").addEventListener("change", syncInputs);
+
+$("go").addEventListener("click", async () => {
+  const q = $("q").value.trim();
+  if (!q) return;
+  $("hits").innerHTML = '<div class="empty">检索中…</div>';
+  try {
+    const r = await api("/api/retrieve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: q, context: $("ctx").value,
+        cross_context: $("cross").checked, limit: 10,
+      }),
+    });
+    if (!r.hits.length) { $("hits").innerHTML = '<div class="empty">无命中。</div>'; return; }
+    const head = `<div class="sub" style="margin-bottom:8px">
+      context=${esc(r.context)} · cross=${r.cross_context} · merged=${r.merged} · 命中 ${r.hits.length}
+    </div>`;
+    $("hits").innerHTML = head + r.hits.map(h => `
+      <div class="hit">
+        <div class="title">${esc(h.title)}</div>
+        <div class="meta"><span class="tag">${esc(h.source)}</span>
+          score ${h.score}${h.page ? " · p" + h.page : ""}${h.section ? " · " + esc(h.section) : ""}
+          ${h.uri ? " · " + esc(h.uri) : ""}</div>
+        <div class="text">${esc(h.text.slice(0, 260))}</div>
+      </div>`).join("");
+  } catch (e) {
+    $("hits").innerHTML = `<div class="err">检索失败：${esc(e.message)}</div>`;
+  }
+});
+
+$("q").addEventListener("keydown", (e) => { if (e.key === "Enter") $("go").click(); });
+
+$("submit").addEventListener("click", async () => {
+  let inputs;
+  try { inputs = JSON.parse($("inputs").value || "{}"); }
+  catch (e) { $("runmsg").innerHTML = `<span class="err">inputs 不是合法 JSON</span>`; return; }
+  $("runmsg").textContent = "提交中…";
+  try {
+    const run = await api("/api/runs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ skill: $("skill").value, inputs, context: $("runctx").value }),
+    });
+    $("runmsg").innerHTML = `已提交 <b>${esc(run.run_id)}</b> → <span class="st ${esc(run.status)}">${esc(run.status)}</span>`;
+    loadRuns(run.run_id);
+  } catch (e) {
+    $("runmsg").innerHTML = `<span class="err">提交失败：${esc(e.message)}</span>`;
+  }
+});
+
+$("refresh").addEventListener("click", () => loadRuns());
+$("status").addEventListener("change", () => loadRuns());
+
+async function loadRuns(showId) {
+  const st = $("status").value;
+  try {
+    const r = await api("/api/runs" + (st ? `?status=${encodeURIComponent(st)}` : "") + "&limit=30");
+    if (!r.runs.length) { $("list").innerHTML = '<div class="empty">（无历史 Run）</div>'; return; }
+    $("list").innerHTML = `<table><thead><tr>
+      <th>run_id</th><th>skill</th><th>context</th><th>status</th><th>steps</th><th>cost</th><th>created</th>
+      </tr></thead><tbody>${r.runs.map(x => `
+      <tr class="row-click" data-id="${esc(x.run_id)}">
+        <td>${esc(x.run_id)}</td><td>${esc(x.skill)}</td><td>${esc(x.context)}</td>
+        <td class="st ${esc(x.status)}">${esc(x.status)}</td>
+        <td>${x.steps}</td><td>¥${x.cost_cny.toFixed(4)}</td>
+        <td>${esc((x.created_at || "").slice(0, 19).replace("T", " "))}</td>
+      </tr>`).join("")}</tbody></table>`;
+    document.querySelectorAll("tr.row-click").forEach(tr => {
+      tr.addEventListener("click", () => showRun(tr.dataset.id));
+    });
+    if (showId) showRun(showId);
+  } catch (e) {
+    $("list").innerHTML = `<div class="err">加载失败：${esc(e.message)}</div>`;
+  }
+}
+
+async function showRun(id) {
+  $("detail").hidden = false;
+  $("detail").textContent = "加载中…";
+  try {
+    const r = await api("/api/runs/" + encodeURIComponent(id));
+    $("detail").textContent = JSON.stringify(r, null, 2);
+  } catch (e) {
+    $("detail").textContent = "加载失败：" + e.message;
+  }
+}
+
+boot();
+</script>
+</body>
+</html>

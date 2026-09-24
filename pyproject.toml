@@ -12,6 +12,8 @@ dependencies = ["pydantic>=2.9"]
 [project.optional-dependencies]
 dev = ["pytest>=8", "jsonschema>=4.23"]
 http = ["requests>=2.28"]
+# PDF 工具层（阶段 4）：表格感知 + 双栏重排。仅在需要解析 PDF 时安装。
+pdf = ["PyMuPDF>=1.24", "pdfplumber>=0.11"]
 
 [tool.setuptools]
 # Two source roots: the base lives at ./workstation, the contracts at
@@ -21,8 +23,15 @@ packages = [
     "workstation",
     "workstation.core",
     "workstation.core.model_gateway",
+    "workstation.core.runtime",
+    "workstation.core.retrieval",
+    "workstation.core.retrieval.sources",
+    "workstation.core.server",
     "workstation.skills",
     "workstation.skills.ppt",
+    "workstation.skills.knowledge",
+    "workstation.tools",
+    "workstation.tools.pdf",
     "workstation_contracts",
 ]
 

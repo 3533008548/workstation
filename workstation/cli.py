@@ -7,13 +7,15 @@
     python -m workstation.cli run knowledge --input examples/fixtures/knowledge_request.json
     python -m workstation.cli retrieve --query "..." --context interview
     python -m workstation.cli pdf extract <file.pdf> [--json]
+    python -m workstation.cli serve                  # 阶段 5：本地工作台视图
     python -m workstation.cli runs list
     python -m workstation.cli runs show <run_id>
 
-说明：本项目现阶段**没有** HTTP 服务、没有 UI、没有定时任务。它是一套
-「库 + 契约 + 技能 + 检索门面」。这个 CLI 是把「能用」这件事落地的最小入口。
-检索（``retrieve``）按 context 收窄（红线#5：记忆不合并）；``pdf`` 是本地
-PDF 解析工具，填补知识库的 PDF 缺口。
+说明：本项目**没有**定时任务、没有对外服务。它是一套「库 + 契约 + 技能 +
+检索门面 + 一个只监听 loopback 的本地视图」。这个 CLI 是把「能用」这件事
+落地的最小入口。检索（``retrieve``）按 context 收窄（红线#5：记忆不合并）；
+``pdf`` 是本地 PDF 解析工具，填补知识库的 PDF 缺口；``serve`` 起的是本机
+工作台，**非 loopback 地址一律拒绝绑定**（数据不出本机）。
 """
 
 from __future__ import annotations
@@ -35,6 +37,7 @@ from workstation import __version__ as WS_VERSION
 from workstation_contracts import CONTRACT_VERSION
 from workstation_contracts import RunStatus, TaskOptions, TaskRequest
 from workstation.core.runtime import SkillRuntime, open_run_store
+from workstation.core.server import ServerError, build_workbench, serve
 from workstation.core.retrieval import RetrievalService
 from workstation.core.retrieval.sources import (
     KnowledgeRetrievalSource,
@@ -357,6 +360,34 @@ def cmd_retrieve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_serve(args: argparse.Namespace) -> int:
+    """阶段 5：启动本地工作台视图（仅 loopback）。"""
+    home = resolve_home(args)
+    kb = resolve_knowledge_root(args)
+    vault = args.knowledge_vault or os.environ.get("WORKSTATION_KNOWLEDGE_VAULT") or _default_vault(kb)
+    md = args.markdown_folder or os.environ.get("WORKSTATION_MARKDOWN_FOLDER") or str(
+        REPO / "examples" / "fixtures" / "markdown"
+    )
+    pdf = args.pdf_folder or os.environ.get("WORKSTATION_PDF_FOLDER") or str(
+        REPO / "examples" / "fixtures" / "pdfs"
+    )
+
+    workbench = build_workbench(
+        home=home,
+        ppt_agent=resolve_ppt_agent(args),
+        knowledge_root=kb,
+        vault=vault,
+        markdown_folder=md,
+        pdf_folder=pdf,
+    )
+    try:
+        serve(workbench, host=args.host, port=args.port, open_browser=args.open)
+    except ServerError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    return 0
+
+
 # ----------------------------------------------------------------- 入口
 
 
@@ -413,6 +444,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_ret.add_argument("--markdown-folder", help="Markdown 目录（thesis 源）")
     p_ret.add_argument("--pdf-folder", help="PDF 目录（default 源）")
 
+    p_serve = sub.add_parser("serve", help="启动本地工作台视图（仅监听 loopback）")
+    p_serve.add_argument("--host", default="127.0.0.1", help="绑定地址（仅允许 loopback；默认 127.0.0.1）")
+    p_serve.add_argument("--port", type=int, default=8787, help="端口（默认 8787）")
+    p_serve.add_argument("--open", action="store_true", help="启动后自动打开浏览器")
+    p_serve.add_argument("--knowledge-vault", help="知识库 Vault 绝对路径")
+    p_serve.add_argument("--markdown-folder", help="Markdown 目录（thesis 源）")
+    p_serve.add_argument("--pdf-folder", help="PDF 目录（default 源）")
+
     p_pdf = sub.add_parser("pdf", help="本地 PDF 解析工具（表格感知 + 双栏重排）")
     p_pdf.add_argument("rest", nargs=argparse.REMAINDER,
                        help="传给 workstation.tools.pdf 的参数（extract / chunks）")
@@ -431,6 +470,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_runs(args)
     if args.cmd == "retrieve":
         return cmd_retrieve(args)
+    if args.cmd == "serve":
+        return cmd_serve(args)
     if args.cmd == "pdf":
         return pdf_cli.main(args.rest)
     parser.print_help()

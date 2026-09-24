@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态：阶段 0–4 已完成，下一步阶段 5
+## 当前状态：阶段 0–5 已完成
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
@@ -18,7 +18,7 @@
 | **2 · PPT 技能化** | CLI → `ppt-bridge/1` 子进程接口，补 P0 缺陷 | ✅ 已完成 |
 | **3 · 知识库桥接** | `knowledge-bridge/1` CLI（esbuild 打包 core/，只读检索）+ SourceRef 映射 + 双向契约 | ✅ 已完成 |
 | **4 · 按场景隔离的检索与记忆** | `RetrievalService`（RRF 融合）+ 三源（knowledge/interview、markdown/thesis、pdf/default）+ 本地 PDF 解析工具层；**记忆不合并** | ✅ 已完成 |
-| 5 · 统一入口 | 前端工作台视图 | ⬜ |
+| **5 · 统一入口** | 只监听 loopback 的本地工作台视图 + HTTP 接口（标准库 `http.server`，零新依赖）+ SSE 事件回放 | ✅ 已完成 |
 
 ---
 
@@ -43,10 +43,11 @@ workstation/
   core/model_gateway/             # 阶段 1a：唯一 LLM 入口（路由/熔断/准入/预算）
   core/runtime/                   # 阶段 1b：Run 落盘 / 执行形态 / 编排与回放
   core/retrieval/                 # 阶段 4：检索门面（RRF 融合 + 源注册 + 按 context 收窄）
+  core/server/                    # 阶段 5：统一入口（仅 loopback 的 HTTP 服务 + 工作台视图）
   skills/ppt/                     # 阶段 2：PPTAgent 适配器（子进程 + ppt-bridge/1）
   skills/knowledge/               # 阶段 3：知识库检索适配器（子进程 + knowledge-bridge/1）
   tools/pdf/                      # 阶段 4：本地 PDF 解析工具（表格感知+双栏重排，填补知识库 PDF 缺口）
-docs/contracts/                   # 五份契约文档
+docs/contracts/                   # 契约文档
 scripts/
   gen_schema.py                   # Python → JSON Schema
   verify.sh                       # 契约闸门：schema 漂移检查 + 全量测试
@@ -56,6 +57,11 @@ examples/
   stage1b_runtime.py              # 落盘 / 恢复句柄 / 幂等 / 事件回放
   stage2_ppt_bridge.py            # 页数门禁演示 + 真实 PPTAgent 渲染
   stage3_knowledge_bridge.py      # 知识库只读检索端到端（真实 Node 子进程）
+  stage4_retrieval.py             # 按场景隔离的跨源检索（RRF 融合）
+  stage5_server.py                # 统一入口端到端：起服务 → 检索 → 提交 Run → 事件回放
+examples/fixtures/
+  markdown/graduation/            # thesis 场景的 Markdown 源
+  pdfs/system-design-interview.pdf  # default 场景的 PDF 源
 config/workstation.example.yaml
 ```
 
@@ -84,7 +90,10 @@ python examples/stage3_knowledge_bridge.py --query "langgraph 和 langchain 区�
 python examples/stage4_retrieval.py
 
 # 7. 本地 PDF 解析工具（表格感知 + 双栏重排；填补知识库 PDF 缺口）
-python -m workstation.tools.pdf extract examples/fixtures/pdfs/sample.pdf --json
+python -m workstation.tools.pdf extract examples/fixtures/pdfs/system-design-interview.pdf --json
+
+# 8. 统一入口：启动工作台视图（仅监听 loopback，浏览器开 http://127.0.0.1:8787/）
+python examples/stage5_server.py --serve --open
 ```
 
 Python 最低 3.11。
@@ -93,9 +102,14 @@ Python 最低 3.11。
 
 ## 怎么启动（CLI）
 
-本项目现阶段**没有** HTTP 服务、UI 或定时任务。它是一套「库 + 契约 + 两个
-可用技能（PPT、知识库检索）」。`workstation/cli.py` 是当前唯一可启动入口——它把
-「能用」这件事落地：一次调用走完 预检 → 子进程桥接 → Run 持久化。
+本项目**没有**定时任务、没有对外服务。它是一套「库 + 契约 + 两个可用技能
+（PPT、知识库检索）+ 检索门面 + 一个只监听 loopback 的本地视图」。
+`workstation/cli.py` 是唯一可启动入口——它把「能用」这件事落地：一次调用走完
+预检 → 子进程桥接 → Run 持久化。
+
+阶段 5 起多了一个真入口：`serve` 会起一个**只绑 127.0.0.1** 的本地服务（标准库
+`http.server`，零新依赖），工作台视图 `http://127.0.0.1:8787/` 调的就是它暴露的
+那套接口。非 loopback 地址一律拒绝绑定。
 
 ```bash
 # 前置
@@ -124,7 +138,26 @@ python -m workstation.cli runs show <run_id>
 python -m workstation.cli retrieve --query "langgraph 和 langchain 区别" --context interview
 python -m workstation.cli retrieve --query "知识蒸馏" --context thesis
 python -m workstation.cli retrieve --query "注意力机制" --context interview --cross-context
+
+# 6. 阶段 5：启动本地工作台视图（浏览器开 http://127.0.0.1:8787/）
+python -m workstation.cli serve --open
+
+# 7. 只自检不起服务（跑一遍 健康/检索/提交 Run/事件回放 就退出）
+python examples/stage5_server.py
 ```
+
+工作台 HTTP 接口（全部同源，无 CORS）：
+
+| 方法 | 路径 | 用途 |
+|---|---|---|
+| GET | `/` | 工作台视图 |
+| GET | `/api/health` | 版本 / home / 场景 / 技能 / 检索源 |
+| GET | `/api/skills` | 技能 manifest 列表 |
+| GET | `/api/runs` | 历史 Run（`?status=&skill=&limit=`） |
+| POST | `/api/runs` | 提交 Run：`{skill, inputs, context, options?}` |
+| GET | `/api/runs/<id>` | Run 详情 |
+| GET | `/api/runs/<id>/events` | 事件回放（SSE；`RunEvent` 即前端契约） |
+| POST | `/api/retrieve` | 按场景检索：`{query, context, limit, cross_context}` |
 
 产物落在 home（默认 `runtime/`）下：
 
