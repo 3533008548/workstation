@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "workstation"
+version = "0.1.0"
+description = "Personal AI workbench: shared Python base + stage-0 contracts"
+requires-python = ">=3.11"
+dependencies = ["pydantic>=2.9"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "jsonschema>=4.23"]
+http = ["requests>=2.28"]
+
+[tool.setuptools]
+# Two source roots: the base lives at ./workstation, the contracts at
+# ./contracts/python. One editable install covers both.
+package-dir = {"" = ".", "workstation_contracts" = "contracts/python/workstation_contracts"}
+packages = [
+    "workstation",
+    "workstation.core",
+    "workstation.core.model_gateway",
+    "workstation_contracts",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["contracts/python/tests", "tests"]
+addopts = "-q"

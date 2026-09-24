@@ -11,20 +11,63 @@ api:
     - http://127.0.0.1:7860
     - http://localhost:7860
 
+# 模型名取自三个项目代码中真实出现的型号，不是臆测值：
+#   research_agent -> deepseek-flash；knowledge -> deepseek-v4-flash-vision-exp
+#   PPTAgent       -> deepseek-flash / deepseek-v4-flash / deepseek-v4-pro
+#                     glm-5.3 / glm-5.3-flash
+# DeepSeek 是默认车道；GLM 只对知识库死了，PPTAgent 仍在用，故保留为备用车道。
 model:
-  default: deepseek-chat
-  fallback:
-    - deepseek-chat
-    - glm-4-flash
-  vision: deepseek-vision
-  # 本地嵌入（数据不出本机的关键）
-  embedding:
-    model: BAAI/bge-m3        # 迁移前保持 all-MiniLM-L6-v2，见契约三 §6.1
-    dim: 1024
-    device: cpu
+  default_route: chat
+  providers:
+    deepseek:
+      base_url: https://api.deepseek.com/v1
+      api_key_env: WORKSTATION_DEEPSEEK_API_KEY
+      read_timeout_seconds: 30
+    glm:
+      base_url: https://open.bigmodel.cn/api/paas/v4
+      api_key_env: WORKSTATION_GLM_API_KEY
+      read_timeout_seconds: 60
+
+  models:
+    deepseek-flash:        { provider: deepseek }
+    deepseek-v4-flash:     { provider: deepseek }
+    deepseek-v4-pro:       { provider: deepseek }
+    # 视觉模型：会把本地图片字节发往云端，必须经 net 权限放行
+    deepseek-v4-flash-vision-exp:
+      provider: deepseek
+      capabilities: [vision]
+    glm-5.3:               { provider: glm }
+    glm-5.3-flash:         { provider: glm }
+
+  routes:
+    classify: { primary: deepseek-flash, fallbacks: [glm-5.3-flash], temperature: 0.0, max_tokens: 1024 }
+    chat:     { primary: deepseek-flash, fallbacks: [glm-5.3-flash], max_tokens: 4096 }
+    plan:     { primary: glm-5.3,        fallbacks: [deepseek-v4-pro], max_tokens: 8192 }
+    compress: { primary: glm-5.3,        fallbacks: [deepseek-v4-pro], max_tokens: 8192 }
+    patch:    { primary: deepseek-flash, fallbacks: [deepseek-v4-flash], temperature: 0.0 }
+    # 质量门禁：禁止降级到更便宜的模型，否则验证结论会被静默削弱
+    verify:   { primary: deepseek-flash, fallbacks: [], allow_fallback: false, temperature: 0.0 }
+    vision:   { primary: deepseek-v4-flash-vision-exp, fallbacks: [], allow_fallback: false, json_mode: false }
+
+  # 价格表：占位值，务必按你的实际账单校准，否则预算治理器会守错数字
+  pricing:
+    default_input_cny_per_mtok: 2.0
+    default_output_cny_per_mtok: 8.0
+
+  admission:
+    max_concurrency: 4
+    interactive_reserved_slots: 1    # 批处理永远饿不死交互式请求
+    low_priority_max_concurrency: 1
+    queue_size: 20
+    attempts_per_model: 2
+    circuit_failure_threshold: 3
+    circuit_recovery_seconds: 120
+    request_deadline_seconds: 45
+    max_retries: 2
+
   budget:
     daily_cost_cny: 20.0
-    interactive_reserved_slots: 1   # 沿用科研助手 api_resilience 模型
+    monthly_cost_cny: 300.0
 
 retrieval:
   chroma_path: derived/chroma

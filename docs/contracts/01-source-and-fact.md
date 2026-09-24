@@ -93,22 +93,47 @@ requested_pages > 2 × recommends_page_count()
 | 科研助手论文 | `research.paper` | `uri = primary/papers/<id>.pdf`；`source_type=paper`；`origin=primary`；`locator.page` 来自 PDF 解析；`content_hash` = 文件 sha256 |
 | 科研助手网页/API 结果 | `research.web` | `uri` = 绝对 URL；`origin=derived`（可重新拉取）；`is_local=False` → 命中外发策略例外清单 |
 | 知识库笔记 | `knowledge.note` | `uri = primary/vault/<相对路径>.md`；`source_type=note`；`locator.line_start..end`；`content_hash` = 正文 sha256 |
-| 知识库附件 | `knowledge.attachment` | `source_type=attachment`；**走本地解析，不走 GLM-OCR**（见合规） |
+| 知识库附件 | `knowledge.attachment` | `source_type=attachment`；图片目前**外发 DeepSeek Vision**，需经 §5 的 `net` 放行；PDF 当前**未被解析**（能力缺失，由科研助手本地链路填补） |
 | PPT 既有 `Fact` | `pptx.fact` | ⚠️ `source: string` 无法自动映射 → 适配器必须**显式失败**并要求重建，不得用 `title=source` 蒙混 |
 | Deck 产出 | `pptx.render` | `artifact.origin=primary`，`source_ids` 回填自输入 FactSet |
 
 ---
 
-## 5. 合规硬约束（与"数据不出本机"直接冲突的两条）
+## 5. 合规硬约束（与"数据不出本机"直接冲突的部分）
 
-知识库桌面端当前有两条路径在把本地文件外发：
+> **更正（2026-09-24）**：早期结论写的是"知识库把本地文件外发给 GLM-OCR / GLM 视觉"。
+> 该结论已过期。核实代码后：**知识库桌面端已经把 GLM 整体下线，改走 DeepSeek。**
+> 但外发风险并未消失，只是换了厂商；而且 PDF 从"外发解析"变成了**根本不解析**。
 
-- `sendToGlm` → GLM-OCR 解析 PDF（`desktop-knowledge-system-service.ts`）
-- 图片 → GLM 视觉模型
+核实到的实际状态：
 
-科研助手的 `vision_model` 同样外发图像。
+| 结论 | 证据 |
+|---|---|
+| `GlmClient` 已成死代码 | `core/services/glm-client.ts` 定义了类，**全项目无任何 import** |
+| 运行期走 DeepSeek | `desktop-attachment-service.ts:145` 实际 `new DeepSeekVisionClient(...)`；`desktop-knowledge-system-service.ts` 文本侧用 `DeepSeekClient` |
+| 配置已清除 | `src/main.ts:848` 写 `.env` 时**主动过滤** `GLM_API_KEY` / `GLM_MODEL` |
+| **PDF 不再解析** | `markFailed(path, "DeepSeek Vision 暂不支持 PDF 解析")`，PDF 只计入 `unsupportedPdfCount` |
 
-**契约层给出的处置**：`SourceRef.is_local == True` 且目标能力需要云端处理时，必须由 `Permission{resource: "net", requires_confirm: True}` 显式放行。**默认拒绝，显式授权。** 阶段 3 之前，PDF 索引链路要整体切换到科研助手已有的本地解析（PyMuPDF 双栏重排 + pdfplumber 表格）——这也是两个项目之间第一处真实的能力复用。
+因此当前真实的外发面是：
+
+1. **图片外发（仍在）** — 附件图片被 `binary.toString("base64")` 后 POST 到 DeepSeek Vision 云端。这是**唯一仍在运行的文件外发路径**。
+2. **PDF 解析缺失（新问题）** — 不是"不该外发"，而是"根本没有本地解析能力"。
+
+**契约层处置**：`SourceRef.is_local == True` 且目标能力需要云端处理时，必须由 `Permission{resource: "net", requires_confirm: True}` 显式放行，**默认拒绝、显式授权**。这条对图片路径同样适用。
+
+**命名债（必须一并清理，否则会误导后续维护者）**：策略动作至今仍叫 `sendToGlm`，出现在 `policy-engine.ts` 与三个 `desktop-*` 服务里，而错误提示已经写"DeepSeek Vision"；`agent-runtime.ts` 的工具描述仍写"按权限、GLM 限速和每日预算处理"；`services/env.ts` 的模板注释仍写"PDF OCR 与图片解析使用 GLM"。**代码已迁移，名字没跟上。**
+
+**对阶段 3 的影响（变得更好了）**：原本要"把 GLM-OCR 换成本地解析"，现在变成"**补一个本来就没有的 PDF 解析能力**"。科研助手已有 PyMuPDF 双栏重排 + pdfplumber 表格，直接复用即可——这从"替换"降级为"填补空白"，阻力更小，收益不变，仍是两个项目之间第一处真实的能力复用。
+
+### GLM 在网关里的定位
+
+GLM **没有被从网关移除**，因为它只对知识库死了，没有全局死：
+
+- 知识库：已全面迁移 DeepSeek（文本 + 视觉）
+- 科研助手：只配了 DeepSeek（`config.yaml`：`model: deepseek-flash`）
+- **PPTAgent：仍在用 GLM** — `src/llm.ts` 的 `MODEL_ROUTES` 把 `plan` / `compress` 主模型设为 `glm-5.3`
+
+所以网关里 **DeepSeek 是默认车道，GLM 是备用/专长车道**，且全部由配置驱动，未来任何一边再迁移都只改 yaml。
 
 ---
 
