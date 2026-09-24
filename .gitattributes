@@ -1,0 +1,9 @@
+# Normalize line endings so Windows checkouts don't produce CRLF churn in diffs.
+* text=auto eol=lf
+
+# Generated / binary artefacts
+*.pptx binary
+*.pdf  binary
+*.db   binary
+*.png  binary
+*.jpg  binary
