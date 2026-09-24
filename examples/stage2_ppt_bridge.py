@@ -138,7 +138,9 @@ def real_bridge_demo(config: PptSkillConfig) -> bool:
         return False
 
     deck_spec = json.loads(deck_spec_path.read_text(encoding="utf-8"))
-    # render 模式：调用方自带 DeckSpec，本进程不调模型 —— 因此不需要 API key。
+    # 注意：本进程（工作台）不调模型，但 PPTAgent 的 bridge 命令在渲染前
+    # 仍会走 compress 路由做事实摘要 —— 因此 WORKSTATION_DEEPSEEK_API_KEY
+    # 必须设置，否则桥接会在模型调用处失败（见 run ppt 的 BRIDGE_FAILED）。
     facts = [
         Fact(
             fact_id=item["id"],

@@ -16,7 +16,7 @@
 | **1a · 模型网关** | 统一 LLM 接入 + 预算治理 | ✅ 已完成 |
 | **1b · 运行时** | Run 落盘 + 执行形态归一 + 事件回放 | ✅ 已完成 |
 | **2 · PPT 技能化** | CLI → `ppt-bridge/1` 子进程接口，补 P0 缺陷 | ✅ 已完成 |
-| 3 · 知识库桥接 | `HttpExecutor` 已就绪，待接 TS 服务化 + 本地 PDF 解析 | ⬜ 下一步 |
+| 3 · 知识库桥接 | `SubprocessExecutor` 已就绪，待接 CLI bridge（`knowledge-bridge/1`）+ 本地 PDF 解析 | ⬜ 下一步 |
 | 4 · 统一检索与记忆 | 跨源 RRF、Markdown 入 Chroma、画像合并 | ⬜ |
 | 5 · 统一入口 | 前端工作台视图 | ⬜ |
 
@@ -61,12 +61,12 @@ config/workstation.example.yaml
 
 ```bash
 # 1. 依赖（建议 venv）
-pip install -e contracts/python[dev]
+pip install -e .[dev]
 
 # 2. 契约闸门（生成 schema + 跑全量测试）
 bash scripts/verify.sh
 
-# 3. 本地配置
+# 3. 本地配置（可选；CLI 也认环境变量与默认值）
 cp config/workstation.example.yaml config/workstation.yaml
 export WORKSTATION_API_TOKEN=<随机串>
 
@@ -75,6 +75,47 @@ python examples/stage2_ppt_bridge.py
 ```
 
 Python 最低 3.11。
+
+---
+
+## 怎么启动（CLI）
+
+本项目现阶段**没有** HTTP 服务、UI 或定时任务。它是一套「库 + 契约 + 一个
+可用技能（PPT）」。`workstation/cli.py` 是当前唯一可启动入口——它把
+「能用」这件事落地：一次调用走完 页数门禁 → 子进程桥接 → Run 持久化。
+
+```bash
+# 前置
+#   - 本机 Node（已装）
+#   - PPTAgent 依赖已装：cd D:/develop/project/PPTagent && npm i
+#   - 渲染需要云模型：export WORKSTATION_DEEPSEEK_API_KEY=...
+
+# 1. 先看本机环境能否真跑起来
+python -m workstation.cli doctor
+
+# 2. 渲染一份 PPT（demo 模板只有 4 条事实，按页数门禁需显式接受框架稿）
+python -m workstation.cli run ppt --input examples/fixtures/ppt_request.json --accept-padding
+
+# 3. 查历史 Run（即使被门禁拦下或失败，也会落盘，可审计）
+python -m workstation.cli runs list
+python -m workstation.cli runs show <run_id>
+```
+
+产物落在 home（默认 `runtime/`）下：
+
+| 路径 | 内容 |
+|---|---|
+| `primary/decks/<run_id>/deck.pptx` | 交付物（不可重建） |
+| `derived/runs/<run_id>/` | 中间态：request / response / 渲染报告 |
+| `derived/runs.sqlite3` | Run 历史（RunStore，阶段 1b 落盘） |
+
+> 注：本进程（工作台侧）不调模型，但 **PPTAgent 的 bridge 命令在渲染前会走
+> `compress` 路由做事实摘要**，所以 `WORKSTATION_DEEPSEEK_API_KEY` 必须设置，
+> 否则会在模型调用处失败（`BRIDGE_FAILED`）。
+
+`--home` / `--ppt-agent` 为全局选项（也可经 `WORKSTATION_HOME` /
+`WORKSTATION_PPT_AGENT` 或 config 提供），需写在子命令之前，如
+`python -m workstation.cli --home /tmp/ws run ppt --input ...`。
 
 ---
 

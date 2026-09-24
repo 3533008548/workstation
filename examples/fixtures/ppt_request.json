@@ -1,0 +1,357 @@
+{
+  "brief": {
+    "title": "Q3 业务复盘与技术演进",
+    "audience": "公司管理层与核心项目团队",
+    "goal": "复盘增长质量、工程进展，并明确 Q4 的优先行动"
+  },
+  "facts": [
+    {
+      "fact_id": "fact-mau",
+      "text": "MAU 从 Q2 的 120 万增长到 Q3 的 185 万",
+      "source_ids": [
+        "src_37c90c905963bf47cd330660"
+      ],
+      "confidence": "high"
+    },
+    {
+      "fact_id": "fact-paid-rate",
+      "text": "付费率从 Q2 的 3.2% 下降到 Q3 的 2.8%",
+      "source_ids": [
+        "src_37c90c905963bf47cd330660"
+      ],
+      "confidence": "high"
+    },
+    {
+      "fact_id": "fact-revenue",
+      "text": "收入从 Q2 的 890 万元增长到 Q3 的 1150 万元",
+      "source_ids": [
+        "src_37c90c905963bf47cd330660"
+      ],
+      "confidence": "high"
+    },
+    {
+      "fact_id": "fact-cost",
+      "text": "成本从 Q2 的 620 万元增长到 Q3 的 810 万元",
+      "source_ids": [
+        "src_37c90c905963bf47cd330660"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "deck_spec": {
+    "version": 1,
+    "deck": {
+      "title": "Q3 业务复盘与技术演进",
+      "audience": "公司管理层与核心项目团队",
+      "goal": "复盘增长质量、工程进展，并明确 Q4 的优先行动",
+      "language": "zh-CN",
+      "tone": "务实、清晰、数据驱动",
+      "requestedPageCount": 10
+    },
+    "theme": {
+      "colors": [
+        "12355B",
+        "1F7A8C",
+        "D97706",
+        "F4F6F8"
+      ],
+      "headingFont": "微软雅黑",
+      "bodyFont": "微软雅黑",
+      "density": "medium"
+    },
+    "facts": [
+      {
+        "id": "fact-mau",
+        "text": "MAU 从 Q2 的 120 万增长到 Q3 的 185 万",
+        "source": "用户提供的 Q3 业务复盘示例数据",
+        "sourceIds": [
+          "src_37c90c905963bf47cd330660"
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "fact-paid-rate",
+        "text": "付费率从 Q2 的 3.2% 下降到 Q3 的 2.8%",
+        "source": "用户提供的 Q3 业务复盘示例数据",
+        "sourceIds": [
+          "src_37c90c905963bf47cd330660"
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "fact-revenue",
+        "text": "收入从 Q2 的 890 万元增长到 Q3 的 1150 万元",
+        "source": "用户提供的 Q3 业务复盘示例数据",
+        "sourceIds": [
+          "src_37c90c905963bf47cd330660"
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "fact-cost",
+        "text": "成本从 Q2 的 620 万元增长到 Q3 的 810 万元",
+        "source": "用户提供的 Q3 业务复盘示例数据",
+        "sourceIds": [
+          "src_37c90c905963bf47cd330660"
+        ],
+        "confidence": "high"
+      }
+    ],
+    "assets": [],
+    "pages": [
+      {
+        "id": "page-01",
+        "type": "cover",
+        "layout": "cover",
+        "title": "Q3 业务复盘与技术演进",
+        "points": [
+          "从规模增长转向增长质量",
+          "管理层与核心项目团队 | 2026 Q3"
+        ],
+        "sourceFactIds": [
+          "fact-mau",
+          "fact-revenue"
+        ]
+      },
+      {
+        "id": "page-02",
+        "type": "catalog",
+        "layout": "agenda",
+        "title": "本次复盘目录",
+        "points": [
+          "背景与目标：为什么现在要重新审视增长",
+          "业务结果：用户、收入、成本与付费率",
+          "问题归因：增长质量与组织协同",
+          "技术进展：稳定性、效率和债务治理",
+          "Q4 行动：目标、负责人和验证指标"
+        ],
+        "sourceFactIds": [
+          "fact-mau",
+          "fact-paid-rate",
+          "fact-revenue",
+          "fact-cost"
+        ]
+      },
+      {
+        "id": "page-03",
+        "type": "section",
+        "layout": "section",
+        "title": "背景与目标",
+        "points": [
+          "增长数字仍然亮眼，但结构性风险已经出现",
+          "本页只看问题，不急于给结论"
+        ],
+        "sourceFactIds": [
+          "fact-mau",
+          "fact-paid-rate"
+        ]
+      },
+      {
+        "id": "page-04",
+        "type": "content",
+        "layout": "bullets",
+        "title": "为什么现在必须调整增长策略",
+        "points": [
+          "用户规模增长 54%，但付费率下降 0.4 个百分点",
+          "收入增长 29%，成本增长 31%，增长效率开始承压",
+          "失败项目消耗了跨团队资源，但复盘机制没有及时闭环",
+          "Q4 需要同时守住增长、毛利和组织执行三条线"
+        ],
+        "insight": "规模增长不等于增长质量，下一阶段必须用单位经济效率和留存来定义成功。",
+        "sourceFactIds": [
+          "fact-mau",
+          "fact-paid-rate",
+          "fact-revenue",
+          "fact-cost"
+        ]
+      },
+      {
+        "id": "page-05",
+        "type": "content",
+        "layout": "split",
+        "title": "三条执行原则",
+        "points": [
+          "先做可验证的小闭环，再扩大投入",
+          "每个增长项目必须绑定成本、留存和收入指标",
+          "技术债治理与业务项目共享同一优先级队列",
+          "失败项目必须在两周内完成证据归档和经验复用"
+        ],
+        "insight": "原则必须落到项目准入、周度复盘和季度预算三个动作上。",
+        "sourceFactIds": [
+          "fact-cost",
+          "fact-revenue"
+        ]
+      },
+      {
+        "id": "page-06",
+        "type": "content",
+        "layout": "metrics",
+        "title": "Q3 关键经营指标",
+        "points": [
+          "增长仍在继续",
+          "质量信号需要警惕",
+          "用统一口径看变化"
+        ],
+        "data": {
+          "kind": "metrics",
+          "items": [
+            {
+              "label": "Q3 收入",
+              "value": "1150 万元",
+              "delta": "较 Q2 +29.2%",
+              "tone": "positive"
+            },
+            {
+              "label": "Q3 成本",
+              "value": "810 万元",
+              "delta": "较 Q2 +30.6%",
+              "tone": "warning"
+            },
+            {
+              "label": "MAU",
+              "value": "185 万",
+              "delta": "较 Q2 +54.2%",
+              "tone": "positive"
+            },
+            {
+              "label": "付费率",
+              "value": "2.8%",
+              "delta": "较 Q2 -0.4pp",
+              "tone": "warning"
+            }
+          ]
+        },
+        "sourceFactIds": [
+          "fact-mau",
+          "fact-paid-rate",
+          "fact-revenue",
+          "fact-cost"
+        ]
+      },
+      {
+        "id": "page-07",
+        "type": "content",
+        "layout": "data",
+        "title": "数据分析：增长与成本正在同时加速",
+        "points": [
+          "数据表使用 PowerPoint 原生表格，可直接双击编辑"
+        ],
+        "insight": "收入增长低于成本增长，说明获客和交付效率尚未同步改善。Q4 应优先验证高成本渠道的边际收益。",
+        "data": {
+          "kind": "table",
+          "headers": [
+            "指标",
+            "Q2",
+            "Q3",
+            "变化"
+          ],
+          "rows": [
+            [
+              "MAU",
+              "120 万",
+              "185 万",
+              "+54.2%"
+            ],
+            [
+              "付费率",
+              "3.2%",
+              "2.8%",
+              "-0.4pp"
+            ],
+            [
+              "收入",
+              "890 万元",
+              "1150 万元",
+              "+29.2%"
+            ],
+            [
+              "成本",
+              "620 万元",
+              "810 万元",
+              "+30.6%"
+            ]
+          ],
+          "sourceNote": "数据来源：用户提供的 Q3 业务复盘示例数据"
+        },
+        "sourceFactIds": [
+          "fact-mau",
+          "fact-paid-rate",
+          "fact-revenue",
+          "fact-cost"
+        ]
+      },
+      {
+        "id": "page-08",
+        "type": "content",
+        "layout": "data",
+        "title": "趋势图：收入增长略低于成本增长",
+        "points": [
+          "图表为 PowerPoint 原生图表，可编辑数据和切换图表类型"
+        ],
+        "insight": "收入和成本都在上升，但成本增速更高。若付费转化和交付效率不改善，Q4 的利润空间会继续被压缩。",
+        "data": {
+          "kind": "chart",
+          "chartType": "line",
+          "categories": [
+            "Q2",
+            "Q3"
+          ],
+          "series": [
+            {
+              "name": "收入（百万元）",
+              "values": [
+                8.9,
+                11.5
+              ],
+              "color": "1F7A8C"
+            },
+            {
+              "name": "成本（百万元）",
+              "values": [
+                6.2,
+                8.1
+              ],
+              "color": "D97706"
+            }
+          ],
+          "valueSuffix": ""
+        },
+        "sourceFactIds": [
+          "fact-revenue",
+          "fact-cost"
+        ]
+      },
+      {
+        "id": "page-09",
+        "type": "content",
+        "layout": "bullets",
+        "title": "Q4 优先行动",
+        "points": [
+          "两周内完成高成本渠道归因，冻结低效投放",
+          "把付费转化纳入增长项目的准入门槛",
+          "将核心服务稳定性目标与季度预算绑定",
+          "每月公开一次失败项目复盘和复用结论"
+        ],
+        "insight": "所有动作都必须在月底前有负责人、基线和验收口径。",
+        "sourceFactIds": [
+          "fact-paid-rate",
+          "fact-cost"
+        ]
+      },
+      {
+        "id": "page-10",
+        "type": "ending",
+        "layout": "ending",
+        "title": "谢谢",
+        "points": [
+          "请在讨论中确认：Q4 的第一优先级是什么？",
+          "哪些指标可以代表增长质量已经改善？",
+          "哪些项目应该暂停或重新定义成功标准？"
+        ],
+        "sourceFactIds": []
+      }
+    ]
+  },
+  "requested_pages": 10,
+  "accept_padding": false
+}
