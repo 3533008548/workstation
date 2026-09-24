@@ -1,0 +1,220 @@
+{
+  "$defs": {
+    "Locator": {
+      "additionalProperties": false,
+      "description": "Position *inside* a source. All fields optional; fill what you know.",
+      "properties": {
+        "char_end": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Char End"
+        },
+        "char_start": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Char Start"
+        },
+        "extra": {
+          "additionalProperties": true,
+          "title": "Extra",
+          "type": "object"
+        },
+        "line_end": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line End"
+        },
+        "line_start": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line Start"
+        },
+        "page": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page"
+        },
+        "section": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section"
+        },
+        "slide": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Slide"
+        },
+        "timestamp_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp S"
+        }
+      },
+      "title": "Locator",
+      "type": "object"
+    },
+    "Origin": {
+      "description": "Backup policy class.\n\n``primary`` cannot be rebuilt from anything else -- losing it is data loss.\n``derived`` is a cache and may be deleted at any time.",
+      "enum": [
+        "primary",
+        "derived"
+      ],
+      "title": "Origin",
+      "type": "string"
+    },
+    "SourceType": {
+      "description": "Where a source physically lives.",
+      "enum": [
+        "paper",
+        "note",
+        "web",
+        "dataset",
+        "attachment",
+        "deck",
+        "generated"
+      ],
+      "title": "SourceType",
+      "type": "string"
+    }
+  },
+  "$id": "https://workstation.local/schema/source-ref.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "content_hash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "sha256 of the bytes; drives invalidation",
+      "title": "Content Hash"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "language": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Language"
+    },
+    "locator": {
+      "$ref": "#/$defs/Locator"
+    },
+    "meta": {
+      "additionalProperties": true,
+      "title": "Meta",
+      "type": "object"
+    },
+    "origin": {
+      "$ref": "#/$defs/Origin",
+      "description": "primary = must back up; derived = cache"
+    },
+    "producer": {
+      "description": "Adapter that minted this ref, e.g. 'research.paper', 'knowledge.note'",
+      "title": "Producer",
+      "type": "string"
+    },
+    "source_id": {
+      "description": "Content-addressed id, see derive_source_id()",
+      "title": "Source Id",
+      "type": "string"
+    },
+    "source_type": {
+      "$ref": "#/$defs/SourceType"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    },
+    "uri": {
+      "description": "Relative path under WORKSTATION_HOME, or an absolute URL",
+      "title": "Uri",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_id",
+    "source_type",
+    "uri",
+    "title",
+    "origin",
+    "producer"
+  ],
+  "title": "SourceRef",
+  "type": "object",
+  "x-contract-version": "0.1.0"
+}

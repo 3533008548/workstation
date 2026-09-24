@@ -1,0 +1,234 @@
+{
+  "$defs": {
+    "Budget": {
+      "additionalProperties": false,
+      "description": "Hard ceilings. Exceeding one is a run failure, never a silent overrun.",
+      "properties": {
+        "max_cost_cny": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Cost Cny"
+        },
+        "max_llm_calls": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Llm Calls"
+        },
+        "max_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Tokens"
+        },
+        "max_tool_calls": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Tool Calls"
+        },
+        "max_wall_clock_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Wall Clock S"
+        }
+      },
+      "title": "Budget",
+      "type": "object"
+    },
+    "Permission": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "default": "",
+          "title": "Reason",
+          "type": "string"
+        },
+        "requires_confirm": {
+          "default": false,
+          "title": "Requires Confirm",
+          "type": "boolean"
+        },
+        "resource": {
+          "$ref": "#/$defs/PermissionResource"
+        },
+        "scope": {
+          "default": "",
+          "title": "Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource"
+      ],
+      "title": "Permission",
+      "type": "object"
+    },
+    "PermissionResource": {
+      "enum": [
+        "llm",
+        "net",
+        "fs:primary",
+        "fs:derived",
+        "subprocess",
+        "vault:write"
+      ],
+      "title": "PermissionResource",
+      "type": "string"
+    },
+    "RuntimeKind": {
+      "enum": [
+        "inprocess",
+        "subprocess",
+        "http",
+        "bridge"
+      ],
+      "title": "RuntimeKind",
+      "type": "string"
+    },
+    "RuntimeSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "entrypoint": {
+          "description": "python module path | CLI command | http base url | adapter key",
+          "title": "Entrypoint",
+          "type": "string"
+        },
+        "isolated": {
+          "default": false,
+          "description": "True forces a fresh process per run (PPT: pptxgenjs module-level state)",
+          "title": "Isolated",
+          "type": "boolean"
+        },
+        "kind": {
+          "$ref": "#/$defs/RuntimeKind"
+        },
+        "startup_timeout_s": {
+          "default": 30,
+          "minimum": 1,
+          "title": "Startup Timeout S",
+          "type": "integer"
+        },
+        "transport_options": {
+          "additionalProperties": true,
+          "title": "Transport Options",
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind",
+        "entrypoint"
+      ],
+      "title": "RuntimeSpec",
+      "type": "object"
+    }
+  },
+  "$id": "https://workstation.local/schema/skill-manifest.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "default_budget": {
+      "$ref": "#/$defs/Budget"
+    },
+    "deprecated": {
+      "default": false,
+      "title": "Deprecated",
+      "type": "boolean"
+    },
+    "description": {
+      "minLength": 1,
+      "title": "Description",
+      "type": "string"
+    },
+    "inputs": {
+      "additionalProperties": true,
+      "description": "JSON Schema (draft 2020-12) for TaskRequest.inputs",
+      "title": "Inputs",
+      "type": "object"
+    },
+    "meta": {
+      "additionalProperties": true,
+      "title": "Meta",
+      "type": "object"
+    },
+    "name": {
+      "pattern": "^[a-z][a-z0-9-]{1,63}$",
+      "title": "Name",
+      "type": "string"
+    },
+    "outputs": {
+      "additionalProperties": true,
+      "description": "JSON Schema for Run.outputs",
+      "title": "Outputs",
+      "type": "object"
+    },
+    "permissions": {
+      "items": {
+        "$ref": "#/$defs/Permission"
+      },
+      "title": "Permissions",
+      "type": "array"
+    },
+    "runtime": {
+      "$ref": "#/$defs/RuntimeSpec"
+    },
+    "tags": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Tags",
+      "type": "array"
+    },
+    "version": {
+      "default": "0.1.0",
+      "pattern": "^\\d+\\.\\d+\\.\\d+",
+      "title": "Version",
+      "type": "string"
+    },
+    "when_to_use": {
+      "default": "",
+      "description": "Trigger guidance -- the router reads this, not the description",
+      "title": "When To Use",
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "description",
+    "runtime"
+  ],
+  "title": "SkillManifest",
+  "type": "object",
+  "x-contract-version": "0.1.0"
+}

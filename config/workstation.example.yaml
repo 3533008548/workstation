@@ -1,0 +1,48 @@
+# 复制到 config/workstation.yaml 后修改。该文件已在 .gitignore 中。
+# 注意：不要在任何代码或提交中包含真实 token。
+
+home: runtime                 # 等价于 WORKSTATION_HOME；绝对路径亦可
+
+api:
+  host: 127.0.0.1             # 仅本机。切勿改为 0.0.0.0
+  port: 7860
+  # auth_token 从环境变量 WORKSTATION_API_TOKEN 读取，不写在此处
+  allowed_origins:
+    - http://127.0.0.1:7860
+    - http://localhost:7860
+
+model:
+  default: deepseek-chat
+  fallback:
+    - deepseek-chat
+    - glm-4-flash
+  vision: deepseek-vision
+  # 本地嵌入（数据不出本机的关键）
+  embedding:
+    model: BAAI/bge-m3        # 迁移前保持 all-MiniLM-L6-v2，见契约三 §6.1
+    dim: 1024
+    device: cpu
+  budget:
+    daily_cost_cny: 20.0
+    interactive_reserved_slots: 1   # 沿用科研助手 api_resilience 模型
+
+retrieval:
+  chroma_path: derived/chroma
+  collection: papers_bge_m3   # 换嵌入模型必须换 collection，禁止原地覆盖
+  reranker_enabled: true
+  reranker_model: cross-encoder/mmarco-mMiniLMv2-L12-H384-v1
+
+skills:
+  - name: pptx
+    runtime: subprocess
+    isolated: true            # pptxgenjs 模块级状态串扰，必须进程隔离
+
+policy:
+  # 本地文件外发默认拒绝，需显式放行
+  allow_local_egress: false
+  vault_write_channel: knowledge   # 唯一写入通道
+
+external:
+  research_agent: D:/develop/academic/research_agent
+  knowledge_desktop: D:/develop/agent for obsidian
+  ppt_agent: D:/develop/project/PPTagent

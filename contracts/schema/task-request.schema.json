@@ -1,0 +1,182 @@
+{
+  "$defs": {
+    "Budget": {
+      "additionalProperties": false,
+      "description": "Hard ceilings. Exceeding one is a run failure, never a silent overrun.",
+      "properties": {
+        "max_cost_cny": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Cost Cny"
+        },
+        "max_llm_calls": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Llm Calls"
+        },
+        "max_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Tokens"
+        },
+        "max_tool_calls": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Tool Calls"
+        },
+        "max_wall_clock_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Wall Clock S"
+        }
+      },
+      "title": "Budget",
+      "type": "object"
+    },
+    "Priority": {
+      "description": "Interactive beats batch. Mirrors research_agent's reserved-slot model.",
+      "enum": [
+        "interactive",
+        "normal",
+        "batch"
+      ],
+      "title": "Priority",
+      "type": "string"
+    },
+    "TaskOptions": {
+      "additionalProperties": false,
+      "properties": {
+        "budget": {
+          "$ref": "#/$defs/Budget"
+        },
+        "dry_run": {
+          "default": false,
+          "title": "Dry Run",
+          "type": "boolean"
+        },
+        "idempotency_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Re-issuing the same key returns the existing run",
+          "title": "Idempotency Key"
+        },
+        "locale": {
+          "default": "zh-CN",
+          "title": "Locale",
+          "type": "string"
+        },
+        "priority": {
+          "$ref": "#/$defs/Priority",
+          "default": "normal"
+        },
+        "require_approval": {
+          "default": false,
+          "description": "Block before any fs:primary or vault:write side effect",
+          "title": "Require Approval",
+          "type": "boolean"
+        },
+        "timeout_s": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeout S"
+        }
+      },
+      "title": "TaskOptions",
+      "type": "object"
+    }
+  },
+  "$id": "https://workstation.local/schema/task-request.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "inputs": {
+      "additionalProperties": true,
+      "title": "Inputs",
+      "type": "object"
+    },
+    "options": {
+      "$ref": "#/$defs/TaskOptions"
+    },
+    "parent_run_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Parent Run Id"
+    },
+    "requested_at": {
+      "format": "date-time",
+      "title": "Requested At",
+      "type": "string"
+    },
+    "skill": {
+      "description": "Skill name, must match SkillManifest.name",
+      "title": "Skill",
+      "type": "string"
+    },
+    "task_id": {
+      "title": "Task Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "skill"
+  ],
+  "title": "TaskRequest",
+  "type": "object",
+  "x-contract-version": "0.1.0"
+}

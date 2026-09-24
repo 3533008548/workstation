@@ -1,0 +1,122 @@
+{
+  "$defs": {
+    "Confidence": {
+      "enum": [
+        "high",
+        "medium",
+        "low",
+        "unknown"
+      ],
+      "title": "Confidence",
+      "type": "string"
+    },
+    "Fact": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "$ref": "#/$defs/Confidence",
+          "default": "unknown"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Verbatim snippet backing the text",
+          "title": "Evidence"
+        },
+        "fact_id": {
+          "title": "Fact Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/FactKind",
+          "default": "claim"
+        },
+        "meta": {
+          "additionalProperties": true,
+          "title": "Meta",
+          "type": "object"
+        },
+        "qualifiers": {
+          "additionalProperties": true,
+          "description": "Scope conditions: n=, year=, population=, unit=, caveat=",
+          "title": "Qualifiers",
+          "type": "object"
+        },
+        "source_ids": {
+          "description": "SourceRef.source_id values; REQUIRED -- a fact with no source is not a fact",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Source Ids",
+          "type": "array"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "source_ids"
+      ],
+      "title": "Fact",
+      "type": "object"
+    },
+    "FactKind": {
+      "enum": [
+        "claim",
+        "metric",
+        "method",
+        "finding",
+        "definition",
+        "quote",
+        "hypothesis"
+      ],
+      "title": "FactKind",
+      "type": "string"
+    }
+  },
+  "$id": "https://workstation.local/schema/fact-set.schema.json",
+  "additionalProperties": false,
+  "description": "An ordered bundle of facts, e.g. one study's evidence ledger.",
+  "properties": {
+    "facts": {
+      "items": {
+        "$ref": "#/$defs/Fact"
+      },
+      "title": "Facts",
+      "type": "array"
+    },
+    "label": {
+      "default": "",
+      "title": "Label",
+      "type": "string"
+    },
+    "meta": {
+      "additionalProperties": true,
+      "title": "Meta",
+      "type": "object"
+    },
+    "set_id": {
+      "title": "Set Id",
+      "type": "string"
+    }
+  },
+  "title": "FactSet",
+  "type": "object",
+  "x-contract-version": "0.1.0"
+}

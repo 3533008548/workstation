@@ -1,0 +1,39 @@
+# --- python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- node ---
+node_modules/
+dist/
+*.tsbuildinfo
+
+# --- workbench runtime data (never commit) ---
+runtime/
+.runtime/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite3
+
+# --- secrets / local config ---
+.env
+.env.local
+config/workstation.yaml
+!config/workstation.example.yaml
+
+# --- logs & artifacts ---
+logs/
+*.log
+artifacts/
+tmp/
+
+# --- os ---
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,100 @@
+{
+  "$defs": {
+    "ArtifactKind": {
+      "enum": [
+        "document",
+        "deck",
+        "markdown",
+        "image",
+        "table",
+        "json",
+        "report"
+      ],
+      "title": "ArtifactKind",
+      "type": "string"
+    },
+    "Origin": {
+      "description": "Backup policy class.\n\n``primary`` cannot be rebuilt from anything else -- losing it is data loss.\n``derived`` is a cache and may be deleted at any time.",
+      "enum": [
+        "primary",
+        "derived"
+      ],
+      "title": "Origin",
+      "type": "string"
+    }
+  },
+  "$id": "https://workstation.local/schema/artifact.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "artifact_id": {
+      "title": "Artifact Id",
+      "type": "string"
+    },
+    "fact_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Fact Ids",
+      "type": "array"
+    },
+    "kind": {
+      "$ref": "#/$defs/ArtifactKind",
+      "default": "document"
+    },
+    "media_type": {
+      "default": "application/octet-stream",
+      "title": "Media Type",
+      "type": "string"
+    },
+    "meta": {
+      "additionalProperties": true,
+      "title": "Meta",
+      "type": "object"
+    },
+    "origin": {
+      "$ref": "#/$defs/Origin",
+      "default": "derived"
+    },
+    "producer": {
+      "default": "",
+      "title": "Producer",
+      "type": "string"
+    },
+    "size_bytes": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Size Bytes"
+    },
+    "source_ids": {
+      "description": "SourceRef ids this artifact is derived from",
+      "items": {
+        "type": "string"
+      },
+      "title": "Source Ids",
+      "type": "array"
+    },
+    "title": {
+      "default": "",
+      "title": "Title",
+      "type": "string"
+    },
+    "uri": {
+      "description": "Path relative to WORKSTATION_HOME, or absolute URL",
+      "title": "Uri",
+      "type": "string"
+    }
+  },
+  "required": [
+    "uri"
+  ],
+  "title": "Artifact",
+  "type": "object",
+  "x-contract-version": "0.1.0"
+}

@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "workstation-contracts"
+version = "0.1.0"
+description = "Stage-0 contracts for the personal AI workbench (SourceRef / Fact / Run / SkillManifest)"
+requires-python = ">=3.11"
+dependencies = ["pydantic>=2.9"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "jsonschema>=4.23"]
+
+[tool.setuptools]
+packages = ["workstation_contracts"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

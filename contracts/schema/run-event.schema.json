@@ -1,0 +1,60 @@
+{
+  "$defs": {
+    "EventType": {
+      "enum": [
+        "run.created",
+        "run.started",
+        "run.progress",
+        "run.completed",
+        "run.failed",
+        "run.cancelled",
+        "step.started",
+        "step.finished",
+        "artifact.produced",
+        "budget.warning",
+        "approval.required"
+      ],
+      "title": "EventType",
+      "type": "string"
+    }
+  },
+  "$id": "https://workstation.local/schema/run-event.schema.json",
+  "additionalProperties": false,
+  "description": "SSE wire shape. The entire frontend contract lives here.",
+  "properties": {
+    "event_id": {
+      "title": "Event Id",
+      "type": "string"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "seq": {
+      "minimum": 0,
+      "title": "Seq",
+      "type": "integer"
+    },
+    "ts": {
+      "format": "date-time",
+      "title": "Ts",
+      "type": "string"
+    },
+    "type": {
+      "$ref": "#/$defs/EventType"
+    }
+  },
+  "required": [
+    "run_id",
+    "seq",
+    "type"
+  ],
+  "title": "RunEvent",
+  "type": "object",
+  "x-contract-version": "0.1.0"
+}
