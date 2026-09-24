@@ -107,6 +107,15 @@ class TaskRequest(ContractModel):
     options: TaskOptions = Field(default_factory=TaskOptions)
     parent_run_id: str | None = None
     requested_at: datetime = Field(default_factory=utcnow)
+    context: str = Field(
+        default="default",
+        description=(
+            "Scenario/domain partition. The workbench is a multi-scenario entry, "
+            "NOT a merged memory store (red line #5): thesis vs interview must never "
+            "contaminate each other. Known values: default | thesis | interview. "
+            "Retrieval is scoped to this context unless cross_context is requested."
+        ),
+    )
 
 
 class Step(ContractModel):
@@ -159,6 +168,7 @@ class Run(ContractModel):
     task_id: str | None = None
     skill: str
     skill_version: str = "0.0.0"
+    context: str = "default"
     status: RunStatus = RunStatus.PENDING
 
     inputs: dict[str, Any] = Field(default_factory=dict)
@@ -244,6 +254,7 @@ class Run(ContractModel):
             options=req.options,
             parent_run_id=req.parent_run_id,
             idempotency_key=req.options.idempotency_key,
+            context=req.context,
         )
 
 

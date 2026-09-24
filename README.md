@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态：阶段 0–3 已完成，下一步阶段 4
+## 当前状态：阶段 0–4 已完成，下一步阶段 5
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
@@ -17,7 +17,7 @@
 | **1b · 运行时** | Run 落盘 + 执行形态归一 + 事件回放 | ✅ 已完成 |
 | **2 · PPT 技能化** | CLI → `ppt-bridge/1` 子进程接口，补 P0 缺陷 | ✅ 已完成 |
 | **3 · 知识库桥接** | `knowledge-bridge/1` CLI（esbuild 打包 core/，只读检索）+ SourceRef 映射 + 双向契约 | ✅ 已完成 |
-| 4 · 按场景隔离的检索与记忆 | 跨源 RRF、Markdown 入 Chroma（均按 context 隔离）、本地 PDF 解析工具层；**不做画像/记忆合并** | ⬜ |
+| **4 · 按场景隔离的检索与记忆** | `RetrievalService`（RRF 融合）+ 三源（knowledge/interview、markdown/thesis、pdf/default）+ 本地 PDF 解析工具层；**记忆不合并** | ✅ 已完成 |
 | 5 · 统一入口 | 前端工作台视图 | ⬜ |
 
 ---
@@ -42,8 +42,10 @@ contracts/
 workstation/
   core/model_gateway/             # 阶段 1a：唯一 LLM 入口（路由/熔断/准入/预算）
   core/runtime/                   # 阶段 1b：Run 落盘 / 执行形态 / 编排与回放
+  core/retrieval/                 # 阶段 4：检索门面（RRF 融合 + 源注册 + 按 context 收窄）
   skills/ppt/                     # 阶段 2：PPTAgent 适配器（子进程 + ppt-bridge/1）
   skills/knowledge/               # 阶段 3：知识库检索适配器（子进程 + knowledge-bridge/1）
+  tools/pdf/                      # 阶段 4：本地 PDF 解析工具（表格感知+双栏重排，填补知识库 PDF 缺口）
 docs/contracts/                   # 五份契约文档
 scripts/
   gen_schema.py                   # Python → JSON Schema
@@ -77,6 +79,12 @@ python examples/stage2_ppt_bridge.py
 
 # 5. 阶段 3 端到端（知识库只读检索；无需 API key、不出网、不写 Vault）
 python examples/stage3_knowledge_bridge.py --query "langgraph 和 langchain 区别"
+
+# 6. 阶段 4 端到端（按场景隔离的跨源检索：knowledge/interview、markdown/thesis、pdf/default）
+python examples/stage4_retrieval.py
+
+# 7. 本地 PDF 解析工具（表格感知 + 双栏重排；填补知识库 PDF 缺口）
+python -m workstation.tools.pdf extract examples/fixtures/pdfs/sample.pdf --json
 ```
 
 Python 最低 3.11。
@@ -109,6 +117,13 @@ python -m workstation.cli run knowledge \
 # 4. 查历史 Run（即使被门禁拦下或失败，也会落盘，可审计）
 python -m workstation.cli runs list
 python -m workstation.cli runs show <run_id>
+
+# 5. 按场景隔离的跨源检索（阶段 4）
+#    interview → 只查知识库；thesis → 只查 Markdown 目录；default → 只查 PDF 目录
+#    跨场景是显式 opt-in：加 --cross-context 才跨域（红线#5：记忆不合并）
+python -m workstation.cli retrieve --query "langgraph 和 langchain 区别" --context interview
+python -m workstation.cli retrieve --query "知识蒸馏" --context thesis
+python -m workstation.cli retrieve --query "注意力机制" --context interview --cross-context
 ```
 
 产物落在 home（默认 `runtime/`）下：

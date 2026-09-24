@@ -1,15 +1,19 @@
 """`python -m workstation.cli` —— 当前阶段唯一可启动入口。
 
-提供三个子命令：
+提供子命令：
 
     python -m workstation.cli doctor            # 检查本机环境能否真正跑起来
     python -m workstation.cli run ppt --input examples/fixtures/ppt_request.json
+    python -m workstation.cli run knowledge --input examples/fixtures/knowledge_request.json
+    python -m workstation.cli retrieve --query "..." --context interview
+    python -m workstation.cli pdf extract <file.pdf> [--json]
     python -m workstation.cli runs list
     python -m workstation.cli runs show <run_id>
 
 说明：本项目现阶段**没有** HTTP 服务、没有 UI、没有定时任务。它是一套
-「库 + 契约 + 一个可用技能（PPT）」。这个 CLI 是把「能用」这件事落地的
-最小入口 —— 一次调用走完 模型网关无关、页数门禁、子进程桥接、Run 持久化。
+「库 + 契约 + 技能 + 检索门面」。这个 CLI 是把「能用」这件事落地的最小入口。
+检索（``retrieve``）按 context 收窄（红线#5：记忆不合并）；``pdf`` 是本地
+PDF 解析工具，填补知识库的 PDF 缺口。
 """
 
 from __future__ import annotations
@@ -31,6 +35,12 @@ from workstation import __version__ as WS_VERSION
 from workstation_contracts import CONTRACT_VERSION
 from workstation_contracts import RunStatus, TaskOptions, TaskRequest
 from workstation.core.runtime import SkillRuntime, open_run_store
+from workstation.core.retrieval import RetrievalService
+from workstation.core.retrieval.sources import (
+    KnowledgeRetrievalSource,
+    MarkdownFolderSource,
+    PdfFolderSource,
+)
 from workstation.skills.ppt import (
     PPT_SKILL_NAME,
     PptSkill,
@@ -42,6 +52,7 @@ from workstation.skills.knowledge import (
     KnowledgeSkill,
     KnowledgeSkillConfig,
 )
+from workstation.tools.pdf import cli as pdf_cli
 
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_HOME = REPO / "runtime"
@@ -214,7 +225,12 @@ def _common_options(args: argparse.Namespace) -> TaskOptions:
 
 def _run_ppt(home: Path, ppt: Path, data: dict, args: argparse.Namespace) -> int:
     inputs = _build_input(data, args)
-    request = TaskRequest(skill=PPT_SKILL_NAME, inputs=inputs, options=_common_options(args))
+    request = TaskRequest(
+        skill=PPT_SKILL_NAME,
+        inputs=inputs,
+        options=_common_options(args),
+        context=getattr(args, "context", "default"),
+    )
     config = PptSkillConfig(workspace_home=home, ppt_agent_root=ppt)
     store = open_run_store(home)
     runtime = SkillRuntime(store, {PPT_SKILL_NAME: PptSkill(config, SubprocessRunner())})
@@ -243,7 +259,12 @@ def _run_knowledge(home: Path, kb: Path, data: dict, args: argparse.Namespace) -
         print("knowledge 输入必须含 vault（绝对路径）与 query。", file=sys.stderr)
         return 2
 
-    request = TaskRequest(skill=KNOWLEDGE_SKILL_NAME, inputs=inputs, options=_common_options(args))
+    request = TaskRequest(
+        skill=KNOWLEDGE_SKILL_NAME,
+        inputs=inputs,
+        options=_common_options(args),
+        context=getattr(args, "context", "default"),
+    )
     config = KnowledgeSkillConfig(workspace_home=home, knowledge_root=kb)
     store = open_run_store(home)
     runtime = SkillRuntime(store, {KNOWLEDGE_SKILL_NAME: KnowledgeSkill(config, SubprocessRunner())})
@@ -298,6 +319,44 @@ def cmd_runs(args: argparse.Namespace) -> int:
     return 2
 
 
+def _default_vault(kb: Path) -> str:
+    cand = kb / "knowledge"
+    return str(cand) if cand.exists() else str(kb)
+
+
+def cmd_retrieve(args: argparse.Namespace) -> int:
+    """按场景隔离的跨源检索（阶段 4 门面）。"""
+    kb = resolve_knowledge_root(args)
+    vault = args.knowledge_vault or os.environ.get("WORKSTATION_KNOWLEDGE_VAULT") or _default_vault(kb)
+    md = args.markdown_folder or os.environ.get("WORKSTATION_MARKDOWN_FOLDER") or str(
+        REPO / "examples" / "fixtures" / "markdown"
+    )
+    pdf = args.pdf_folder or os.environ.get("WORKSTATION_PDF_FOLDER") or str(
+        REPO / "examples" / "fixtures" / "pdfs"
+    )
+
+    service = RetrievalService()
+    service.register(KnowledgeRetrievalSource(knowledge_root=kb, vault=vault))
+    service.register(MarkdownFolderSource(md))
+    service.register(PdfFolderSource(pdf))
+
+    result = service.retrieve(
+        args.query,
+        context=args.context,
+        limit=args.limit,
+        cross_context=args.cross_context,
+    )
+    print(f"query   : {result.query}")
+    print(f"context : {result.context}  cross_context={result.cross_context}  merged={result.merged}")
+    print(f"sources : {', '.join(result.per_source) or '(none)'}")
+    print(f"hits    : {len(result.hits)}")
+    for i, h in enumerate(result.hits, 1):
+        tail = f"  p{h.page}" if h.page else ""
+        print(f"  [{i}] ({h.source}) {h.title}  score={h.score:.3f}{tail}")
+        print(f"       {' '.join(str(h.text).split())[:140]}")
+    return 0
+
+
 # ----------------------------------------------------------------- 入口
 
 
@@ -322,6 +381,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_ppt.add_argument("--dry-run", action="store_true", help="只组装请求不执行")
     p_ppt.add_argument("--priority", default="interactive", choices=["interactive", "batch", "low"])
     p_ppt.add_argument("--idempotency", help="幂等键，重复提交返回同一 Run")
+    p_ppt.add_argument("--context", default="default", help="场景分区（红线#5：记忆不合并；检索按 context 收窄）")
 
     p_kb = run_sub.add_parser("knowledge", help="检索知识库 Vault（knowledge-bridge/1）")
     p_kb.add_argument("--input", required=True, help="任务输入 JSON（含 vault/query 等）")
@@ -332,6 +392,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_kb.add_argument("--dry-run", action="store_true", help="只组装请求不执行")
     p_kb.add_argument("--priority", default="interactive", choices=["interactive", "batch", "low"])
     p_kb.add_argument("--idempotency", help="幂等键，重复提交返回同一 Run")
+    p_kb.add_argument("--context", default="default", help="场景分区（interview 等）")
 
     p_runs = sub.add_parser("runs", help="查看历史 Run")
     runs_sub = p_runs.add_subparsers(dest="runs_cmd", required=True)
@@ -340,6 +401,21 @@ def build_parser() -> argparse.ArgumentParser:
     p_list.add_argument("--limit", type=int, default=20)
     p_show = runs_sub.add_parser("show", help="查看单个 Run 详情")
     p_show.add_argument("run_id")
+
+    p_ret = sub.add_parser("retrieve", help="按场景隔离的跨源检索（阶段4 门面）")
+    p_ret.add_argument("--query", required=True, help="检索 Query")
+    p_ret.add_argument("--context", default="default",
+                       help="场景分区：thesis / interview / default（默认不跨域）")
+    p_ret.add_argument("--limit", type=int, default=10)
+    p_ret.add_argument("--cross-context", action="store_true",
+                       help="跨场景检索（显式 opt-in，红线#5：永不默认）")
+    p_ret.add_argument("--knowledge-vault", help="知识库 Vault 绝对路径（默认 <knowledge-root>/knowledge 或 knowledge-root）")
+    p_ret.add_argument("--markdown-folder", help="Markdown 目录（thesis 源）")
+    p_ret.add_argument("--pdf-folder", help="PDF 目录（default 源）")
+
+    p_pdf = sub.add_parser("pdf", help="本地 PDF 解析工具（表格感知 + 双栏重排）")
+    p_pdf.add_argument("rest", nargs=argparse.REMAINDER,
+                       help="传给 workstation.tools.pdf 的参数（extract / chunks）")
 
     return parser
 
@@ -353,6 +429,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_run(args)
     if args.cmd == "runs":
         return cmd_runs(args)
+    if args.cmd == "retrieve":
+        return cmd_retrieve(args)
+    if args.cmd == "pdf":
+        return pdf_cli.main(args.rest)
     parser.print_help()
     return 2
 

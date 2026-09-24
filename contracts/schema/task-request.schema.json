@@ -138,6 +138,12 @@
   "$id": "https://workstation.local/schema/task-request.schema.json",
   "additionalProperties": false,
   "properties": {
+    "context": {
+      "default": "default",
+      "description": "Scenario/domain partition. The workbench is a multi-scenario entry, NOT a merged memory store (red line #5): thesis vs interview must never contaminate each other. Known values: default | thesis | interview. Retrieval is scoped to this context unless cross_context is requested.",
+      "title": "Context",
+      "type": "string"
+    },
     "inputs": {
       "additionalProperties": true,
       "title": "Inputs",

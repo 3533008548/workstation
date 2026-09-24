@@ -419,6 +419,11 @@
       "description": "langgraph thread id / subprocess workdir / opaque token",
       "title": "Checkpoint Ref"
     },
+    "context": {
+      "default": "default",
+      "title": "Context",
+      "type": "string"
+    },
     "created_at": {
       "format": "date-time",
       "title": "Created At",
