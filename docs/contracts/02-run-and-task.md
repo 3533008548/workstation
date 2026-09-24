@@ -51,6 +51,21 @@ Run{ run_id, task_id, skill, skill_version, status, inputs, outputs,
 - `parent_run_id`：子任务链（深度研究 → 检索 → 生成 Deck）。
 - `checkpoint_ref`：**跨形态的恢复句柄**——LangGraph thread id / 子进程 workdir / 不透明 token。这让"跨进程可恢复"成为契约的一部分，而不是某个框架的特性。
 
+#### checkpoint_ref 由谁写、怎么用
+
+字段定义完之后很长一段时间里它是**死字段**（全项目只有定义、零写入）。运行时层落地后，写入方按形态分工：
+
+| 形态 | 写入方 | 句柄内容 | 恢复方式 |
+|---|---|---|---|
+| `subprocess` | 技能（PPT）在 `mkdir(workdir)` 之后立即写入 | `derived/runs/<run_id>/` | 目录里的 `request.json` 完整描述这次渲染，原位重放 |
+| `http` | 桥接服务首次响应回传 | 服务端下发的不透明 token | 轮询 / 续跑 |
+| `local` | 编排框架（LangGraph） | thread id | `graph.invoke(..., config={"thread_id": ...})` |
+
+两条约束：
+
+1. **必须是幂等的**——同一个 `checkpoint_ref` 重复恢复，结果必须等价。
+2. **不是所有技能都可恢复**。`SkillRuntime.resume()` 只对实现了 `resume` 的技能生效，其余抛 `NotImplementedError`。这是有意的不对称：一次性渲染（PPT）重跑比恢复更便宜也更安全，长流程（科研编排）才必须能续跑。
+
 ### TaskOptions
 
 | 字段 | 默认 | 说明 |

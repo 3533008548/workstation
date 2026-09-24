@@ -15,7 +15,17 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-from typing import NamedTuple, Protocol, Sequence
+from typing import Sequence
+
+# Runner 协议已上提到底座（core.runtime.executor），PPT 侧只保留 Windows 特化
+# 的实现。这里 re-export 是为了让既有调用方与测试不必改动一个字 —— 但从此
+# "起一次性进程"在底座上和 HTTP / local 是同一种东西。
+from workstation.core.runtime.executor import (  # noqa: F401  (re-export)
+    Runner,
+    RunnerError,
+    RunnerResult,
+    RunnerTimeout,
+)
 
 __all__ = [
     "Runner",
@@ -24,26 +34,6 @@ __all__ = [
     "RunnerTimeout",
     "SubprocessRunner",
 ]
-
-
-class RunnerError(RuntimeError):
-    """执行器自身的问题（命令不存在、无法启动），不是被调用方的业务失败。"""
-
-
-class RunnerTimeout(RunnerError):
-    pass
-
-
-class RunnerResult(NamedTuple):
-    exit_code: int
-    stdout: str
-    stderr: str
-
-
-class Runner(Protocol):
-    def run(self, argv: Sequence[str], *, cwd: str, timeout_s: float) -> RunnerResult:
-        """起一个一次性进程并等待结束。实现必须保证是**新进程**。"""
-        ...
 
 
 def _resolve(argv: Sequence[str]) -> list[str]:

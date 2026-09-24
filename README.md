@@ -8,14 +8,15 @@
 
 ---
 
-## 当前状态：阶段 2（PPT 技能化）已完成
+## 当前状态：阶段 0–2 已完成，下一步阶段 3
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | **0 · 契约先行** | SourceRef/Fact、Run/Task、数据目录规范 | ✅ 已完成 |
-| **1 · 抽模型网关** | 统一 LLM 接入 + 预算治理 | ✅ 已完成 |
+| **1a · 模型网关** | 统一 LLM 接入 + 预算治理 | ✅ 已完成 |
+| **1b · 运行时** | Run 落盘 + 执行形态归一 + 事件回放 | ✅ 已完成 |
 | **2 · PPT 技能化** | CLI → `ppt-bridge/1` 子进程接口，补 P0 缺陷 | ✅ 已完成 |
-| 3 · 知识库桥接 | TS 服务化 + 补齐本地 PDF 解析（GLM 已下线） | ⬜ 下一步 |
+| 3 · 知识库桥接 | `HttpExecutor` 已就绪，待接 TS 服务化 + 本地 PDF 解析 | ⬜ 下一步 |
 | 4 · 统一检索与记忆 | 跨源 RRF、Markdown 入 Chroma、画像合并 | ⬜ |
 | 5 · 统一入口 | 前端工作台视图 | ⬜ |
 
@@ -39,15 +40,17 @@ contracts/
   schema/                         # 生成的 JSON Schema，已提交
   ts/src/index.ts                 # TS 镜像类型
 workstation/
-  core/model_gateway/             # 阶段 1：唯一 LLM 入口（路由/熔断/准入/预算）
+  core/model_gateway/             # 阶段 1a：唯一 LLM 入口（路由/熔断/准入/预算）
+  core/runtime/                   # 阶段 1b：Run 落盘 / 执行形态 / 编排与回放
   skills/ppt/                     # 阶段 2：PPTAgent 适配器（子进程 + ppt-bridge/1）
-docs/contracts/                   # 四份契约文档
+docs/contracts/                   # 五份契约文档
 scripts/
   gen_schema.py                   # Python → JSON Schema
   verify.sh                       # 契约闸门：schema 漂移检查 + 全量测试
 examples/
   stage0_smoke.py                 # 来源 → 事实 → 页数预检 → Run → SSE
   stage1_gateway.py               # 网关在故障、预算与并发下的行为
+  stage1b_runtime.py              # 落盘 / 恢复句柄 / 幂等 / 事件回放
   stage2_ppt_bridge.py            # 页数门禁演示 + 真实 PPTAgent 渲染
 config/workstation.example.yaml
 ```
@@ -75,12 +78,15 @@ Python 最低 3.11。
 
 ---
 
-## 三条不可回退的红线
+## 四条不可回退的红线
 
 1. **Fact 必须携带 `source_ids`（≥1），绝不携带自由文本来源。**
    PPT Agent 旧模型 `Fact{source: string}` 无法校验、无法去重、无法被策略阻断，是它能凭空生成引用的根因。
 2. **Vault（`primary/vault/`）是唯一写入通道。** 其它技能（含科研助手）一律只读；要产出笔记就发 TaskRequest。
 3. **PPT 渲染必须进程隔离。** `runtime.isolated: true` 是硬约束，不是优化。
+4. **Run 只能有一个落盘处。** 技能不得自己持久化自己的执行状态；新增执行形态
+   必须实现 `Executor`，而不是在技能里另起一份。`HttpExecutor` 默认拒绝非
+   loopback 目标——数据不出本机的守门处。
 
 ---
 

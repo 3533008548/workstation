@@ -63,7 +63,8 @@ from .contract import (
     BridgeTheme,
 )
 from .precheck import DeckFeasibility, assess_deck_feasibility
-from .runner import Runner, RunnerError, RunnerResult
+from .runner import Runner, RunnerResult
+from workstation.core.runtime.executor import SubprocessExecutor, SubprocessJob
 
 __all__ = ["PPT_SKILL_NAME", "PptSkill", "PptSkillConfig", "PptTaskInput"]
 
@@ -211,9 +212,17 @@ def _to_bridge_fact(fact: Fact) -> BridgeFact:
 class PptSkill:
     """PPT 技能执行器。一个实例可反复执行，但每次都起新进程。"""
 
-    def __init__(self, config: PptSkillConfig, runner: Runner) -> None:
+    def __init__(
+        self,
+        config: PptSkillConfig,
+        runner: Runner,
+        executor: SubprocessExecutor | None = None,
+    ) -> None:
         self._config = config
         self._runner = runner
+        # 走底座的 Executor 形态，而不是直接调 runner：这样 PPT 与将来的
+        # 知识库（HTTP）、科研（local）在 Runtime 眼里是同一种东西。
+        self._executor = executor or SubprocessExecutor(runner)
         self.manifest = ppt_skill_manifest(config)
 
     # ---------------------------------------------------------------- 执行
@@ -295,6 +304,9 @@ class PptSkill:
             return run
 
         workdir.mkdir(parents=True, exist_ok=True)
+        # workdir 就是这个 Run 的恢复句柄：request.json 已完整描述这次渲染，
+        # 进程中途挂掉也能靠它原位重放，不必从头重新规划。
+        run.checkpoint_ref = str(workdir)
         request_path = workdir / "request.json"
         response_path = workdir / "response.json"
         request_path.write_text(
@@ -304,19 +316,25 @@ class PptSkill:
 
         step = run.add_step("plan-and-render", StepKind.RENDER)
         argv = [*self._config.command, self._config.cli_entry, "bridge", str(request_path), str(response_path)]
-        started = time.monotonic()
-        try:
-            result = self._runner.run(
-                argv, cwd=str(self._config.ppt_agent_root), timeout_s=self._config.timeout_s
+        outcome = self._executor.execute(
+            SubprocessJob(
+                argv=tuple(argv),
+                cwd=str(self._config.ppt_agent_root),
+                timeout_s=self._config.timeout_s,
+                checkpoint_ref=str(workdir),
             )
-        except RunnerError as exc:
-            step.usage = Usage(wall_clock_s=round(time.monotonic() - started, 3), tool_calls=1)
-            step.finish(StepStatus.FAILED, error=str(exc))
+        )
+        elapsed = outcome.duration_s
+
+        # 124 超时 / 127 执行器不可用：都是"根本没跑起来"，不是业务失败。
+        if outcome.exit_code in (124, 127):
+            step.usage = Usage(wall_clock_s=elapsed, tool_calls=1)
+            step.finish(StepStatus.FAILED, error=outcome.error)
             run.recompute_usage()
-            run.transition(RunStatus.FAILED, error=f"PPT_RUNNER_UNAVAILABLE: {exc}")
+            run.transition(RunStatus.FAILED, error=f"PPT_RUNNER_UNAVAILABLE: {outcome.error}")
             return run
 
-        elapsed = round(time.monotonic() - started, 3)
+        result = RunnerResult(outcome.exit_code, outcome.stdout, outcome.stderr)
         response, parse_error = _read_response(response_path, result)
         if parse_error is not None:
             step.usage = Usage(wall_clock_s=elapsed, tool_calls=1)
