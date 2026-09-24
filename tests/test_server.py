@@ -131,7 +131,7 @@ def _post(base: str, path: str, payload: dict) -> tuple[int, str]:
 # ------------------------------------------------------------------ 装配
 
 
-def test_build_workbench_registers_three_isolated_sources(tmp_path, vault) -> None:
+def test_build_workbench_registers_isolated_sources(tmp_path, vault) -> None:
     wb = build_workbench(
         home=tmp_path / "home",
         ppt_agent=tmp_path / "pptagent",
@@ -141,10 +141,10 @@ def test_build_workbench_registers_three_isolated_sources(tmp_path, vault) -> No
         pdf_folder=str(tmp_path / "pdfs"),
     )
     try:
-        assert set(wb.retrieval.sources) == {"knowledge", "markdown", "pdf"}
-        # 三个源各属一个 context —— 这是红线#5 在检索侧的落点。
+        assert set(wb.retrieval.sources) == {"knowledge", "markdown", "pdf", "research"}
+        # 源按 context 分区 —— 这是红线#5 在检索侧的落点（research 与 markdown 同属 thesis）。
         assert set(wb.contexts) >= {"interview", "thesis", "default"}
-        assert set(wb.runtime.skills) == {"ppt-deck", "knowledge-search"}
+        assert set(wb.runtime.skills) == {"ppt-deck", "knowledge-search", "research-deep"}
     finally:
         wb.store.close()
 
@@ -170,14 +170,14 @@ def test_health_reports_home_contexts_and_skills(server, workbench) -> None:
     assert data["status"] == "ok"
     assert data["home"] == str(workbench.home)
     assert set(data["contexts"]) == {"interview", "thesis"}
-    assert set(data["skills"]) == {"ppt-deck", "knowledge-search"}
+    assert set(data["skills"]) == {"ppt-deck", "knowledge-search", "research-deep"}
 
 
 def test_skills_endpoint_returns_manifests(server) -> None:
     code, body = _get(server, "/api/skills")
     assert code == 200
     skills = {s["name"]: s for s in json.loads(body)["skills"]}
-    assert set(skills) == {"ppt-deck", "knowledge-search"}
+    assert set(skills) == {"ppt-deck", "knowledge-search", "research-deep"}
     # PPT 必须进程隔离（红线#3），知识库只读、不写 Vault（红线#2）。
     assert skills["ppt-deck"]["runtime"]["isolated"] is True
     assert skills["knowledge-search"]["permissions"]
@@ -185,6 +185,9 @@ def test_skills_endpoint_returns_manifests(server) -> None:
         p["resource"] in ("fs:primary", "vault:write")
         for p in skills["knowledge-search"]["permissions"]
     )
+    # 科研助手是长驻 HTTP 服务：与 PPT 相反，它不需要进程隔离。
+    assert skills["research-deep"]["runtime"]["kind"] == "http"
+    assert skills["research-deep"]["runtime"]["isolated"] is False
 
 
 def test_index_is_served_as_html(server) -> None:

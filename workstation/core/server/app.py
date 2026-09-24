@@ -31,6 +31,7 @@ from workstation.core.retrieval.sources import (
     KnowledgeRetrievalSource,
     MarkdownFolderSource,
     PdfFolderSource,
+    ResearchRetrievalSource,
 )
 from workstation.core.runtime import (
     SkillRuntime,
@@ -50,6 +51,12 @@ from workstation.skills.ppt import (
     PptSkillConfig,
     SubprocessRunner,
 )
+from workstation.skills.research import (
+    RESEARCH_SKILL_NAME,
+    ResearchServiceConfig,
+    ResearchSkill,
+    ResearchSkillConfig,
+)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -58,6 +65,9 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1", "127.0.0.0/8"})
 
 DEFAULT_PORT = 8787
+
+#: 科研助手容器（docker-compose 把它发布在 127.0.0.1:7860，本就只绑 loopback）。
+DEFAULT_RESEARCH_URL = "http://127.0.0.1:7860"
 
 
 class ServerError(RuntimeError):
@@ -90,10 +100,14 @@ def build_workbench(
     vault: str | None = None,
     markdown_folder: str | None = None,
     pdf_folder: str | None = None,
+    research_url: str = DEFAULT_RESEARCH_URL,
+    research_token: str = "",
 ) -> Workbench:
     """装配工作台。所有路径解析与 CLI 保持一致，但由调用方显式给出。"""
     home = Path(home).expanduser()
     home.mkdir(parents=True, exist_ok=True)
+
+    research_service = ResearchServiceConfig(base_url=research_url, api_token=research_token)
 
     store = open_run_store(home)
     runtime = SkillRuntime(
@@ -106,6 +120,9 @@ def build_workbench(
             KNOWLEDGE_SKILL_NAME: KnowledgeSkill(
                 KnowledgeSkillConfig(workspace_home=home, knowledge_root=Path(knowledge_root)),
                 SubprocessRunner(),
+            ),
+            RESEARCH_SKILL_NAME: ResearchSkill(
+                ResearchSkillConfig(workspace_home=home, service=research_service)
             ),
         },
     )
@@ -127,6 +144,11 @@ def build_workbench(
     pdf_src = PdfFolderSource(pdf_folder or str(_REPO / "examples" / "fixtures" / "pdfs"))
     retrieval.register(pdf_src)
     contexts.extend(pdf_src.contexts)
+
+    # 科研助手论文库（毕设域，HTTP）。服务没起时这一源自动缺席。
+    research_src = ResearchRetrievalSource(research_service)
+    retrieval.register(research_src)
+    contexts.extend(research_src.contexts)
 
     return Workbench(
         home=home,

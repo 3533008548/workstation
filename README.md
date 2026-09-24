@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态：阶段 0–5 已完成
+## 当前状态：阶段 0–6 已完成
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
@@ -19,6 +19,7 @@
 | **3 · 知识库桥接** | `knowledge-bridge/1` CLI（esbuild 打包 core/，只读检索）+ SourceRef 映射 + 双向契约 | ✅ 已完成 |
 | **4 · 按场景隔离的检索与记忆** | `RetrievalService`（RRF 融合）+ 三源（knowledge/interview、markdown/thesis、pdf/default）+ 本地 PDF 解析工具层；**记忆不合并** | ✅ 已完成 |
 | **5 · 统一入口** | 只监听 loopback 的本地工作台视图 + HTTP 接口（标准库 `http.server`，零新依赖）+ SSE 事件回放 | ✅ 已完成 |
+| **6 · 科研助手接入** | 毕设域：容器化长驻服务走 `HttpExecutor`（loopback 守门）+ 202 异步句柄 → `checkpoint_ref` + `Resumable`；论文库检索源 | ✅ 已完成 |
 
 ---
 
@@ -46,6 +47,7 @@ workstation/
   core/server/                    # 阶段 5：统一入口（仅 loopback 的 HTTP 服务 + 工作台视图）
   skills/ppt/                     # 阶段 2：PPTAgent 适配器（子进程 + ppt-bridge/1）
   skills/knowledge/               # 阶段 3：知识库检索适配器（子进程 + knowledge-bridge/1）
+  skills/research/                # 阶段 6：科研助手适配器（HTTP + loopback 守门，毕设域）
   tools/pdf/                      # 阶段 4：本地 PDF 解析工具（表格感知+双栏重排，填补知识库 PDF 缺口）
 docs/contracts/                   # 契约文档
 scripts/
@@ -59,6 +61,7 @@ examples/
   stage3_knowledge_bridge.py      # 知识库只读检索端到端（真实 Node 子进程）
   stage4_retrieval.py             # 按场景隔离的跨源检索（RRF 融合）
   stage5_server.py                # 统一入口端到端：起服务 → 检索 → 提交 Run → 事件回放
+  stage6_research.py              # 科研助手接入端到端（--demo 无需 Docker）
 examples/fixtures/
   markdown/graduation/            # thesis 场景的 Markdown 源
   pdfs/system-design-interview.pdf  # default 场景的 PDF 源
@@ -94,6 +97,11 @@ python -m workstation.tools.pdf extract examples/fixtures/pdfs/system-design-int
 
 # 8. 统一入口：启动工作台视图（仅监听 loopback，浏览器开 http://127.0.0.1:8787/）
 python examples/stage5_server.py --serve --open
+
+# 9. 阶段 6 科研助手接入（毕设域）。需先起容器：
+#      cd D:/develop/academic/research_agent && docker compose up -d
+python examples/stage6_research.py            # 打真实服务
+python examples/stage6_research.py --demo     # 内置桩服务演示，无需 Docker
 ```
 
 Python 最低 3.11。
@@ -144,6 +152,11 @@ python -m workstation.cli serve --open
 
 # 7. 只自检不起服务（跑一遍 健康/检索/提交 Run/事件回放 就退出）
 python examples/stage5_server.py
+
+# 8. 阶段 6：提交深度研究任务给科研助手（毕设域，异步 202）
+#    前置：cd D:/develop/academic/research_agent && docker compose up -d
+python -m workstation.cli run research --query "知识蒸馏在边缘设备上的应用" --scope both
+python -m workstation.cli runs show <run_id>   # 句柄在 checkpoint_ref
 ```
 
 工作台 HTTP 接口（全部同源，无 CORS）：

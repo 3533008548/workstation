@@ -43,6 +43,7 @@ from workstation.core.retrieval.sources import (
     KnowledgeRetrievalSource,
     MarkdownFolderSource,
     PdfFolderSource,
+    ResearchRetrievalSource,
 )
 from workstation.skills.ppt import (
     PPT_SKILL_NAME,
@@ -55,12 +56,20 @@ from workstation.skills.knowledge import (
     KnowledgeSkill,
     KnowledgeSkillConfig,
 )
+from workstation.skills.research import (
+    RESEARCH_SKILL_NAME,
+    ResearchAgentClient,
+    ResearchServiceConfig,
+    ResearchSkill,
+    ResearchSkillConfig,
+)
 from workstation.tools.pdf import cli as pdf_cli
 
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_HOME = REPO / "runtime"
 DEFAULT_PPT_AGENT = Path("D:/develop/project/PPTagent")  # 仅 fallback，env/yaml 优先
 DEFAULT_KNOWLEDGE_ROOT = Path("D:/develop/agent for obsidian")  # 仅 fallback，env/yaml 优先
+DEFAULT_RESEARCH_URL = "http://127.0.0.1:7860"  # 科研助手容器（docker-compose 默认只绑 loopback）
 
 # 可选 YAML 配置：有 pyyaml 就读 config/workstation.yaml，否则忽略。
 try:
@@ -119,6 +128,23 @@ def resolve_knowledge_root(args: argparse.Namespace) -> Path:
     if not raw:
         raw = str(DEFAULT_KNOWLEDGE_ROOT)
     return Path(raw).expanduser()
+
+
+def resolve_research_url(args: argparse.Namespace) -> str:
+    """科研助手的 base_url（容器化长驻服务，默认 127.0.0.1:7860）。"""
+    return (
+        getattr(args, "research_url", None)
+        or os.environ.get("WORKSTATION_RESEARCH_URL")
+        or (isinstance(_CFG.get("external"), dict) and _CFG["external"].get("research"))
+        or DEFAULT_RESEARCH_URL
+    )
+
+
+def research_service(args: argparse.Namespace) -> ResearchServiceConfig:
+    return ResearchServiceConfig(
+        base_url=resolve_research_url(args),
+        api_token=os.environ.get("WORKSTATION_RESEARCH_TOKEN", ""),
+    )
 
 
 # ----------------------------------------------------------------- 诊断
@@ -181,6 +207,13 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     ok &= _row("ok  " if npm else "FAIL", f"npm: {npm or '未找到'}")
     ok &= _row("ok  " if (kb / "src" / "bridge.ts").exists() else "FAIL",
                "knowledge-bridge 入口存在" if (kb / "src" / "bridge.ts").exists() else "knowledge-bridge 入口缺失")
+
+    # 科研助手是容器化长驻服务（docker-compose 默认只绑 127.0.0.1:7860）。
+    # 没起只是 warn：它不阻塞 PPT / 知识库，只让毕设域缺席。
+    ru = resolve_research_url(args)
+    up = ResearchAgentClient(research_service(args)).health()
+    ok &= _row("ok  " if up else "warn",
+               f"科研助手服务: {ru}（已就绪）" if up else f"科研助手服务: {ru}（未启动：cd 科研助手 && docker compose up -d）")
 
     if yaml is None and not (REPO / "config" / "workstation.yaml").exists():
         _row("warn", "未安装 pyyaml：config/workstation.yaml 不会被读取（CLI 参数/环境变量照常可用）")
@@ -276,6 +309,37 @@ def _run_knowledge(home: Path, kb: Path, data: dict, args: argparse.Namespace) -
     return 0 if run.status is RunStatus.SUCCEEDED else 1
 
 
+def _run_research(home: Path, data: dict, args: argparse.Namespace) -> int:
+    service = research_service(args)
+    query = args.query or data.get("query") or ""
+    inputs = {
+        "query": query,
+        "scope": args.scope or data.get("scope") or "both",
+        "session_id": data.get("session_id", ""),
+        "session_title": data.get("session_title", "工作台·毕设"),
+    }
+    if not inputs["query"]:
+        print("research 必须给 query（--query 或输入 JSON 的 query）。", file=sys.stderr)
+        return 2
+
+    request = TaskRequest(
+        skill=RESEARCH_SKILL_NAME,
+        inputs=inputs,
+        options=_common_options(args),
+        context=getattr(args, "context", "thesis"),
+    )
+    config = ResearchSkillConfig(workspace_home=home, service=service)
+    store = open_run_store(home)
+    runtime = SkillRuntime(store, {RESEARCH_SKILL_NAME: ResearchSkill(config)})
+    run = runtime.submit(request)
+    _print_run(run)
+    if run.outputs.get("agent_run_id"):
+        print(f"agent_run: {run.outputs['agent_run_id']}  status={run.outputs.get('agent_status')}")
+        print(f"stream    : {run.checkpoint_ref}")
+        print("（异步：研究在容器内跑，用 `runs show <run_id>` + resume 跟踪）")
+    return 0 if run.status is RunStatus.SUCCEEDED else 1
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     home = resolve_home(args)
     try:
@@ -291,6 +355,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         return _run_ppt(home, resolve_ppt_agent(args), data, args)
     if args.run_skill == "knowledge":
         return _run_knowledge(home, resolve_knowledge_root(args), data, args)
+    if args.run_skill == "research":
+        return _run_research(home, data, args)
     print(f"未知技能子命令：{args.run_skill}", file=sys.stderr)
     return 2
 
@@ -342,6 +408,8 @@ def cmd_retrieve(args: argparse.Namespace) -> int:
     service.register(KnowledgeRetrievalSource(knowledge_root=kb, vault=vault))
     service.register(MarkdownFolderSource(md))
     service.register(PdfFolderSource(pdf))
+    # 科研助手论文库（毕设域）。服务没起时这一源自动缺席，不影响其它源。
+    service.register(ResearchRetrievalSource(research_service(args)))
 
     result = service.retrieve(
         args.query,
@@ -397,6 +465,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--home", help="工作目录根（默认 workspace/runtime；也可用 WORKSTATION_HOME）")
     parser.add_argument("--ppt-agent", help="PPTAgent 仓库根（也可用 WORKSTATION_PPT_AGENT / config）")
     parser.add_argument("--knowledge-root", help="知识库仓库根（也可用 WORKSTATION_KNOWLEDGE_ROOT / config）")
+    parser.add_argument("--research-url", help="科研助手服务地址（也可用 WORKSTATION_RESEARCH_URL / config）")
 
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -424,6 +493,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_kb.add_argument("--priority", default="interactive", choices=["interactive", "batch", "low"])
     p_kb.add_argument("--idempotency", help="幂等键，重复提交返回同一 Run")
     p_kb.add_argument("--context", default="default", help="场景分区（interview 等）")
+
+    p_rs = run_sub.add_parser("research", help="提交深度研究任务到科研助手（毕设域，异步）")
+    p_rs.add_argument("--input", help="任务输入 JSON（含 query/scope/session_id）")
+    p_rs.add_argument("--query", required=True, help="研究问题（毕设/文献调研）")
+    p_rs.add_argument("--scope", default="both", choices=["both", "local", "public"])
+    p_rs.add_argument("--require-approval", action="store_true")
+    p_rs.add_argument("--dry-run", action="store_true", help="只组装请求不执行")
+    p_rs.add_argument("--priority", default="interactive", choices=["interactive", "batch", "low"])
+    p_rs.add_argument("--idempotency", help="幂等键，重复提交返回同一 Run")
+    p_rs.add_argument("--context", default="thesis", help="场景分区（默认 thesis：毕设域）")
 
     p_runs = sub.add_parser("runs", help="查看历史 Run")
     runs_sub = p_runs.add_subparsers(dest="runs_cmd", required=True)
