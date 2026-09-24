@@ -21,6 +21,8 @@ packages = [
     "workstation",
     "workstation.core",
     "workstation.core.model_gateway",
+    "workstation.skills",
+    "workstation.skills.ppt",
     "workstation_contracts",
 ]
 

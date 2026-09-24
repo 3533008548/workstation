@@ -8,14 +8,14 @@
 
 ---
 
-## 当前状态：阶段 0（契约）已完成
+## 当前状态：阶段 2（PPT 技能化）已完成
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | **0 · 契约先行** | SourceRef/Fact、Run/Task、数据目录规范 | ✅ 已完成 |
-| 1 · 抽模型网关 | 统一 LLM 接入 + 预算治理 + Run 持久化 | ⬜ 下一步 |
-| 2 · PPT 技能化 | CLI → 服务，补 P0 缺陷 | ⬜ |
-| 3 · 知识库桥接 | TS 服务化 + GLM-OCR 换本地解析 | ⬜ |
+| **1 · 抽模型网关** | 统一 LLM 接入 + 预算治理 | ✅ 已完成 |
+| **2 · PPT 技能化** | CLI → `ppt-bridge/1` 子进程接口，补 P0 缺陷 | ✅ 已完成 |
+| 3 · 知识库桥接 | TS 服务化 + 补齐本地 PDF 解析（GLM 已下线） | ⬜ 下一步 |
 | 4 · 统一检索与记忆 | 跨源 RRF、Markdown 入 Chroma、画像合并 | ⬜ |
 | 5 · 统一入口 | 前端工作台视图 | ⬜ |
 
@@ -38,10 +38,17 @@ contracts/
   python/workstation_contracts/   # 契约单一事实来源（Pydantic v2）
   schema/                         # 生成的 JSON Schema，已提交
   ts/src/index.ts                 # TS 镜像类型
-docs/contracts/                   # 三份契约文档
+workstation/
+  core/model_gateway/             # 阶段 1：唯一 LLM 入口（路由/熔断/准入/预算）
+  skills/ppt/                     # 阶段 2：PPTAgent 适配器（子进程 + ppt-bridge/1）
+docs/contracts/                   # 四份契约文档
 scripts/
   gen_schema.py                   # Python → JSON Schema
-  verify.sh                       # 契约闸门：schema 漂移检查 + 测试
+  verify.sh                       # 契约闸门：schema 漂移检查 + 全量测试
+examples/
+  stage0_smoke.py                 # 来源 → 事实 → 页数预检 → Run → SSE
+  stage1_gateway.py               # 网关在故障、预算与并发下的行为
+  stage2_ppt_bridge.py            # 页数门禁演示 + 真实 PPTAgent 渲染
 config/workstation.example.yaml
 ```
 
@@ -53,12 +60,15 @@ config/workstation.example.yaml
 # 1. 依赖（建议 venv）
 pip install -e contracts/python[dev]
 
-# 2. 契约闸门（生成 schema + 跑测试）
+# 2. 契约闸门（生成 schema + 跑全量测试）
 bash scripts/verify.sh
 
 # 3. 本地配置
 cp config/workstation.example.yaml config/workstation.yaml
 export WORKSTATION_API_TOKEN=<随机串>
+
+# 4. 阶段 2 端到端（真实渲染需要本机 Node）
+python examples/stage2_ppt_bridge.py
 ```
 
 Python 最低 3.11。

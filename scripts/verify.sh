@@ -26,7 +26,10 @@ if [[ -n "$(git -C "$ROOT" status --porcelain -- contracts/schema)" ]]; then
 fi
 echo "==> schemas clean"
 
-echo "==> running contract tests"
-( cd "$ROOT/contracts/python" && "$PY" -m pytest )
+# Full suite from the repo root: root pyproject testpaths covers both
+# contracts/python/tests and tests (gateway + skills). Running only the
+# contract subset would let an adapter regression through the gate.
+echo "==> running tests (contracts + gateway + skills)"
+( cd "$ROOT" && "$PY" -m pytest )
 
 echo "==> OK"

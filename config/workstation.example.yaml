@@ -76,9 +76,19 @@ retrieval:
   reranker_model: cross-encoder/mmarco-mMiniLMv2-L12-H384-v1
 
 skills:
-  - name: pptx
+  # PPT：一次性子进程，绝不 import 进本进程（pptxgenjs 模块级状态串扰）。
+  # 契约名 ppt-bridge/1，字段两侧同形，见 docs/contracts/04-ppt-skill.md。
+  ppt-deck:
     runtime: subprocess
-    isolated: true            # pptxgenjs 模块级状态串扰，必须进程隔离
+    isolated: true
+    repo: D:/develop/project/PPTagent
+    command: [npx, tsx]          # 发布态改成 [node] + dist/cli.js
+    cli_entry: src/cli.ts
+    timeout_s: 600
+    facts_per_page: 3            # 与 FactSet.recommends_page_count 的默认值一致
+    accept_padding: false        # 默认拒绝"信息量撑不住"的页数请求
+    deck_root: primary/decks     # 交付物：不可重建 → primary（写入需审批）
+    runs_root: derived/runs      # 中间态：request/response/报告
 
 policy:
   # 本地文件外发默认拒绝，需显式放行
