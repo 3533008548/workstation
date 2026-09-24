@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态：阶段 0–2 已完成，下一步阶段 3
+## 当前状态：阶段 0–3 已完成，下一步阶段 4
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
@@ -16,8 +16,8 @@
 | **1a · 模型网关** | 统一 LLM 接入 + 预算治理 | ✅ 已完成 |
 | **1b · 运行时** | Run 落盘 + 执行形态归一 + 事件回放 | ✅ 已完成 |
 | **2 · PPT 技能化** | CLI → `ppt-bridge/1` 子进程接口，补 P0 缺陷 | ✅ 已完成 |
-| 3 · 知识库桥接 | `SubprocessExecutor` 已就绪，待接 CLI bridge（`knowledge-bridge/1`）+ 本地 PDF 解析 | ⬜ 下一步 |
-| 4 · 统一检索与记忆 | 跨源 RRF、Markdown 入 Chroma、画像合并 | ⬜ |
+| **3 · 知识库桥接** | `knowledge-bridge/1` CLI（esbuild 打包 core/，只读检索）+ SourceRef 映射 + 双向契约 | ✅ 已完成 |
+| 4 · 统一检索与记忆 | 跨源 RRF、Markdown 入 Chroma、画像合并、本地 PDF 解析工具层 | ⬜ |
 | 5 · 统一入口 | 前端工作台视图 | ⬜ |
 
 ---
@@ -27,7 +27,7 @@
 **Python 为主栈的共享底座 + 技能化。**
 
 - 主栈 Python：科研助手是唯一具备生产级编排/队列/向量检索/可观测性的项目，把它抽成底座是"拆"；把另外两个搬进 Python 是重写 13K 行 TS。
-- TS 侧**不搬运、只桥接**：知识库作为长驻 HTTP 服务暴露能力，PPT 作为一次性子进程调用（`pptxgenjs` 有模块级状态串扰，**必须进程隔离**）。
+- TS 侧**不搬运、只桥接**：知识库通过一次性 CLI 子进程暴露能力（`knowledge-bridge/1`，用其既有 esbuild devDep 打包 `core/`，无 HTTP 服务、无 tsx/zod 依赖）；PPT 同样作为一次性子进程调用（`pptxgenjs` 有模块级状态串扰，**必须进程隔离**）。两者形态对称，都走 `SubprocessExecutor`。
 - 技能契约字段兼容社区 **SKILL.md** frontmatter，另加 `runtime` + `permissions`。
 
 ---
@@ -43,6 +43,7 @@ workstation/
   core/model_gateway/             # 阶段 1a：唯一 LLM 入口（路由/熔断/准入/预算）
   core/runtime/                   # 阶段 1b：Run 落盘 / 执行形态 / 编排与回放
   skills/ppt/                     # 阶段 2：PPTAgent 适配器（子进程 + ppt-bridge/1）
+  skills/knowledge/               # 阶段 3：知识库检索适配器（子进程 + knowledge-bridge/1）
 docs/contracts/                   # 五份契约文档
 scripts/
   gen_schema.py                   # Python → JSON Schema
@@ -52,6 +53,7 @@ examples/
   stage1_gateway.py               # 网关在故障、预算与并发下的行为
   stage1b_runtime.py              # 落盘 / 恢复句柄 / 幂等 / 事件回放
   stage2_ppt_bridge.py            # 页数门禁演示 + 真实 PPTAgent 渲染
+  stage3_knowledge_bridge.py      # 知识库只读检索端到端（真实 Node 子进程）
 config/workstation.example.yaml
 ```
 
@@ -72,6 +74,9 @@ export WORKSTATION_API_TOKEN=<随机串>
 
 # 4. 阶段 2 端到端（真实渲染需要本机 Node）
 python examples/stage2_ppt_bridge.py
+
+# 5. 阶段 3 端到端（知识库只读检索；无需 API key、不出网、不写 Vault）
+python examples/stage3_knowledge_bridge.py --query "langgraph 和 langchain 区别"
 ```
 
 Python 最低 3.11。
@@ -80,14 +85,15 @@ Python 最低 3.11。
 
 ## 怎么启动（CLI）
 
-本项目现阶段**没有** HTTP 服务、UI 或定时任务。它是一套「库 + 契约 + 一个
-可用技能（PPT）」。`workstation/cli.py` 是当前唯一可启动入口——它把
-「能用」这件事落地：一次调用走完 页数门禁 → 子进程桥接 → Run 持久化。
+本项目现阶段**没有** HTTP 服务、UI 或定时任务。它是一套「库 + 契约 + 两个
+可用技能（PPT、知识库检索）」。`workstation/cli.py` 是当前唯一可启动入口——它把
+「能用」这件事落地：一次调用走完 预检 → 子进程桥接 → Run 持久化。
 
 ```bash
 # 前置
 #   - 本机 Node（已装）
 #   - PPTAgent 依赖已装：cd D:/develop/project/PPTagent && npm i
+#   - 知识库依赖已装：cd D:/develop/agent for obsidian && npm i
 #   - 渲染需要云模型：export WORKSTATION_DEEPSEEK_API_KEY=...
 
 # 1. 先看本机环境能否真跑起来
@@ -96,7 +102,11 @@ python -m workstation.cli doctor
 # 2. 渲染一份 PPT（demo 模板只有 4 条事实，按页数门禁需显式接受框架稿）
 python -m workstation.cli run ppt --input examples/fixtures/ppt_request.json --accept-padding
 
-# 3. 查历史 Run（即使被门禁拦下或失败，也会落盘，可审计）
+# 3. 检索知识库 Vault（只读；vault 必须是 Windows 原生绝对路径，勿传 /d/...）
+python -m workstation.cli run knowledge \
+  --input examples/fixtures/knowledge_request.json
+
+# 4. 查历史 Run（即使被门禁拦下或失败，也会落盘，可审计）
 python -m workstation.cli runs list
 python -m workstation.cli runs show <run_id>
 ```
@@ -113,9 +123,17 @@ python -m workstation.cli runs show <run_id>
 > `compress` 路由做事实摘要**，所以 `WORKSTATION_DEEPSEEK_API_KEY` 必须设置，
 > 否则会在模型调用处失败（`BRIDGE_FAILED`）。
 
-`--home` / `--ppt-agent` 为全局选项（也可经 `WORKSTATION_HOME` /
-`WORKSTATION_PPT_AGENT` 或 config 提供），需写在子命令之前，如
-`python -m workstation.cli --home /tmp/ws run ppt --input ...`。
+知识库检索（`run knowledge`）则相反：**纯本地只读、不调模型、不出网、不写
+Vault**，因此不需要任何 API key。知识库仓库没有 tsx/zod，桥接用其既有
+`esbuild` devDep 打包 `core/`（CLI 命令 `npm run bridge`），底座侧经
+`SubprocessExecutor` 调用。vault 路径会原样传给 Windows 原生 `node`，**必须是
+Windows 原生绝对路径**（如 `D:/develop/...`），传 Git-Bash 形式的 `/d/...` 会被
+Node 误解为当前盘根目录而检索失败。
+
+`--home` / `--ppt-agent` / `--knowledge-root` 为全局选项（也可经
+`WORKSTATION_HOME` / `WORKSTATION_PPT_AGENT` / `WORKSTATION_KNOWLEDGE_ROOT` 或
+config 提供），需写在子命令之前，如
+`python -m workstation.cli --knowledge-root D:/develop/agent for obsidian run knowledge --input ...`。
 
 ---
 

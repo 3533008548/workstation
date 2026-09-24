@@ -37,10 +37,16 @@ from workstation.skills.ppt import (
     PptSkillConfig,
     SubprocessRunner,
 )
+from workstation.skills.knowledge import (
+    KNOWLEDGE_SKILL_NAME,
+    KnowledgeSkill,
+    KnowledgeSkillConfig,
+)
 
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_HOME = REPO / "runtime"
 DEFAULT_PPT_AGENT = Path("D:/develop/project/PPTagent")  # 仅 fallback，env/yaml 优先
+DEFAULT_KNOWLEDGE_ROOT = Path("D:/develop/agent for obsidian")  # 仅 fallback，env/yaml 优先
 
 # 可选 YAML 配置：有 pyyaml 就读 config/workstation.yaml，否则忽略。
 try:
@@ -85,6 +91,19 @@ def resolve_ppt_agent(args: argparse.Namespace) -> Path:
             raw = ppt.get("repo")
     if not raw:
         raw = str(DEFAULT_PPT_AGENT)
+    return Path(raw).expanduser()
+
+
+def resolve_knowledge_root(args: argparse.Namespace) -> Path:
+    raw = getattr(args, "knowledge_root", None) or os.environ.get("WORKSTATION_KNOWLEDGE_ROOT")
+    if not raw and isinstance(_CFG.get("external"), dict):
+        raw = _CFG["external"].get("knowledge")
+    if not raw and isinstance(_CFG.get("skills"), dict):
+        kb = _CFG["skills"].get("knowledge-search") or {}
+        if isinstance(kb, dict):
+            raw = kb.get("repo")
+    if not raw:
+        raw = str(DEFAULT_KNOWLEDGE_ROOT)
     return Path(raw).expanduser()
 
 
@@ -138,6 +157,17 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     ok &= _row("ok  " if key else "warn",
                "WORKSTATION_DEEPSEEK_API_KEY 已设置" if key else "未设置（render 模式够用；plan 模式需设置）")
 
+    kb = resolve_knowledge_root(args)
+    ok &= _row("ok  " if kb.exists() else "FAIL", f"知识库根: {kb}")
+    # 知识库桥接复用其 esbuild devDep（无 tsx），检查 esbuild 是否可达即可。
+    esbuild_bin = kb / "node_modules" / ".bin" / "esbuild"
+    npm = shutil.which("npm")
+    ok &= _row("ok  " if esbuild_bin.exists() else "warn",
+               "知识库 esbuild 可用" if esbuild_bin.exists() else "知识库 node_modules 未装（先 cd 知识库 && npm i）")
+    ok &= _row("ok  " if npm else "FAIL", f"npm: {npm or '未找到'}")
+    ok &= _row("ok  " if (kb / "src" / "bridge.ts").exists() else "FAIL",
+               "knowledge-bridge 入口存在" if (kb / "src" / "bridge.ts").exists() else "knowledge-bridge 入口缺失")
+
     if yaml is None and not (REPO / "config" / "workstation.yaml").exists():
         _row("warn", "未安装 pyyaml：config/workstation.yaml 不会被读取（CLI 参数/环境变量照常可用）")
 
@@ -173,11 +203,59 @@ def _print_run(run) -> None:
         print(f"slides   : {run.outputs['slide_count']}")
 
 
+def _common_options(args: argparse.Namespace) -> TaskOptions:
+    return TaskOptions(
+        priority=args.priority,
+        require_approval=args.require_approval,
+        dry_run=args.dry_run,
+        idempotency_key=args.idempotency,
+    )
+
+
+def _run_ppt(home: Path, ppt: Path, data: dict, args: argparse.Namespace) -> int:
+    inputs = _build_input(data, args)
+    request = TaskRequest(skill=PPT_SKILL_NAME, inputs=inputs, options=_common_options(args))
+    config = PptSkillConfig(workspace_home=home, ppt_agent_root=ppt)
+    store = open_run_store(home)
+    runtime = SkillRuntime(store, {PPT_SKILL_NAME: PptSkill(config, SubprocessRunner())})
+    run = runtime.submit(request)
+    _print_run(run)
+    return 0 if run.status is RunStatus.SUCCEEDED else 1
+
+
+def _run_knowledge(home: Path, kb: Path, data: dict, args: argparse.Namespace) -> int:
+    inputs: dict = {}
+    if "vault" in data:
+        inputs["vault"] = data["vault"]
+    if args.vault:
+        inputs["vault"] = args.vault
+    if "query" in data:
+        inputs["query"] = data["query"]
+    if args.query:
+        inputs["query"] = args.query
+    if "limit" in data:
+        inputs["limit"] = data["limit"]
+    if args.limit:
+        inputs["limit"] = args.limit
+    if "scope" in data:
+        inputs["scope"] = data["scope"]
+    if not inputs.get("vault") or not inputs.get("query"):
+        print("knowledge 输入必须含 vault（绝对路径）与 query。", file=sys.stderr)
+        return 2
+
+    request = TaskRequest(skill=KNOWLEDGE_SKILL_NAME, inputs=inputs, options=_common_options(args))
+    config = KnowledgeSkillConfig(workspace_home=home, knowledge_root=kb)
+    store = open_run_store(home)
+    runtime = SkillRuntime(store, {KNOWLEDGE_SKILL_NAME: KnowledgeSkill(config, SubprocessRunner())})
+    run = runtime.submit(request)
+    _print_run(run)
+    return 0 if run.status is RunStatus.SUCCEEDED else 1
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     home = resolve_home(args)
-    ppt = resolve_ppt_agent(args)
     try:
-        data = json.loads(Path(args.input).read_text(encoding="utf-8"))
+        data = json.loads(Path(args.input).read_text(encoding="utf-8")) if getattr(args, "input", None) else {}
     except FileNotFoundError:
         print(f"找不到输入文件：{args.input}", file=sys.stderr)
         return 2
@@ -185,25 +263,12 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(f"输入不是合法 JSON：{exc}", file=sys.stderr)
         return 2
 
-    if args.run_skill != "ppt":
-        print(f"未知技能子命令：{args.run_skill}（当前仅支持 ppt）", file=sys.stderr)
-        return 2
-
-    inputs = _build_input(data, args)
-    options = TaskOptions(
-        priority=args.priority,
-        require_approval=args.require_approval,
-        dry_run=args.dry_run,
-        idempotency_key=args.idempotency,
-    )
-    request = TaskRequest(skill=_skill_from_args(args), inputs=inputs, options=options)
-
-    config = PptSkillConfig(workspace_home=home, ppt_agent_root=ppt)
-    store = open_run_store(home)
-    runtime = SkillRuntime(store, {PPT_SKILL_NAME: PptSkill(config, SubprocessRunner())})
-    run = runtime.submit(request)
-    _print_run(run)
-    return 0 if run.status is RunStatus.SUCCEEDED else 1
+    if args.run_skill == "ppt":
+        return _run_ppt(home, resolve_ppt_agent(args), data, args)
+    if args.run_skill == "knowledge":
+        return _run_knowledge(home, resolve_knowledge_root(args), data, args)
+    print(f"未知技能子命令：{args.run_skill}", file=sys.stderr)
+    return 2
 
 
 def cmd_runs(args: argparse.Namespace) -> int:
@@ -241,6 +306,7 @@ def build_parser() -> argparse.ArgumentParser:
     # 全局选项放在最前，所有子命令继承（写在所有子命令之前，如 `ws --home X run ppt`）。
     parser.add_argument("--home", help="工作目录根（默认 workspace/runtime；也可用 WORKSTATION_HOME）")
     parser.add_argument("--ppt-agent", help="PPTAgent 仓库根（也可用 WORKSTATION_PPT_AGENT / config）")
+    parser.add_argument("--knowledge-root", help="知识库仓库根（也可用 WORKSTATION_KNOWLEDGE_ROOT / config）")
 
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -257,6 +323,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_ppt.add_argument("--priority", default="interactive", choices=["interactive", "batch", "low"])
     p_ppt.add_argument("--idempotency", help="幂等键，重复提交返回同一 Run")
 
+    p_kb = run_sub.add_parser("knowledge", help="检索知识库 Vault（knowledge-bridge/1）")
+    p_kb.add_argument("--input", required=True, help="任务输入 JSON（含 vault/query 等）")
+    p_kb.add_argument("--vault", help="覆盖 vault 绝对路径")
+    p_kb.add_argument("--query", help="覆盖 query")
+    p_kb.add_argument("--limit", type=int, help="覆盖 limit（默认 8）")
+    p_kb.add_argument("--require-approval", action="store_true", help="（只读检索无审批，保留兼容）")
+    p_kb.add_argument("--dry-run", action="store_true", help="只组装请求不执行")
+    p_kb.add_argument("--priority", default="interactive", choices=["interactive", "batch", "low"])
+    p_kb.add_argument("--idempotency", help="幂等键，重复提交返回同一 Run")
+
     p_runs = sub.add_parser("runs", help="查看历史 Run")
     runs_sub = p_runs.add_subparsers(dest="runs_cmd", required=True)
     p_list = runs_sub.add_parser("list", help="列出历史 Run")
@@ -266,11 +342,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_show.add_argument("run_id")
 
     return parser
-
-
-def _skill_from_args(args: argparse.Namespace) -> str:
-    # 当前只有 ppt；将来加 subcommand 时映射到 SkillManifest.name。
-    return PPT_SKILL_NAME
 
 
 def main(argv: list[str] | None = None) -> int:
